@@ -1388,11 +1388,23 @@ ${CARD} [data-profile-action] span[aria-hidden="true"] {
 /* New message (DM) recipient list, like Slack's: a wide list under the
    "대상:" field with flat 32px rows, small rounded pictures and a light
    gray highlight. Rows are [data-recipient-key] (people and channels). */
+[data-slack-list]:has([data-recipient-key]) {
+  position: fixed !important;
+  top: var(--slack-list-top) !important;
+  left: var(--slack-list-left) !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+}
 [class*="_picker_"]:has([data-recipient-key]) {
-  width: min(900px, var(--available-width, 900px)) !important;
-  padding: 6px 0 !important;
-  border-radius: 8px !important;
+  width: var(--slack-list-width, min(900px, var(--available-width, 900px))) !important;
+  max-width: none !important;
+  padding: 4px 0 !important;
+  border-radius: 0 0 8px 8px !important;
   corner-shape: round !important;
+  border: 0 !important;
+  background: color-mix(in srgb, var(--text-standard) 3%, var(--surface-panel, #fff)) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12) !important;
 }
 [data-recipient-key] {
   min-height: 32px !important;
@@ -1453,6 +1465,11 @@ section[aria-label="New message"] [aria-label="Recipients"] {
 }
 section[aria-label="New message"] [aria-label="Recipients"] label { color: var(--text-subtle); }
 section[aria-label="New message"] [aria-label="Recipients"] input { font-size: 15px !important; }
+/* Empty message box before anyone is chosen: Slack's "새 메시지 시작". */
+section[aria-label="New message"] [data-composer-surface] [data-placeholder=""]::before {
+  content: ${JSON.stringify(t("새 메시지 시작", "Start a new message"))} !important;
+  color: var(--text-metadata);
+}
 
 /* Mention picker opened from the @ button: the same flat Slack list as the
    @ suggestions (32px rows, 20px rounded pictures, bold name with its detail
@@ -2116,7 +2133,7 @@ function addFormatBars(ctx) {
       for (const surface of document.querySelectorAll("[data-composer-surface]")) {
         orderRow(surface);
         if (surface.querySelector(":scope > .slack-format-bar")) continue;
-        if (!surface.querySelector('[contenteditable="true"]')) continue;
+        if (!surface.querySelector("[contenteditable]")) continue;
         surface.appendChild(build(surface));
       }
     };
@@ -3767,7 +3784,51 @@ function applyRecommendedOnce() {
   applyRecommendedSettings();
 }
 
+// New message: the recipient list sits right under the "대상:" row and
+// stretches to the right edge, as in Slack (Buzz floats a 380px box below
+// the field). Placed through CSS variables, like the profile card.
+function recipientListPlacement(ctx) {
+  const place = () => {
+    const page = document.querySelector('section[aria-label="New message"]');
+    const row = page?.querySelector('[aria-label="Recipients"]');
+    const input = row?.querySelector('input[role="combobox"]');
+    const list = document.querySelector('[class*="_picker_"]:has([data-recipient-key])');
+    const positioner = list?.parentElement;
+    if (!page || !row || !input || !list || !positioner) return;
+    const pageBox = page.getBoundingClientRect();
+    const left = Math.max(pageBox.left, input.getBoundingClientRect().left - 22);
+    const top = row.getBoundingClientRect().bottom;
+    const width = Math.max(280, pageBox.right - left - 8);
+    const set = (name, value) => {
+      if (positioner.style.getPropertyValue(name) !== value) positioner.style.setProperty(name, value);
+    };
+    set("--slack-list-top", `${Math.round(top)}px`);
+    set("--slack-list-left", `${Math.round(left)}px`);
+    set("--slack-list-width", `${Math.round(width)}px`);
+    if (!positioner.hasAttribute("data-slack-list")) positioner.setAttribute("data-slack-list", "");
+  };
+  let queued = false;
+  const queue = () => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => {
+      queued = false;
+      place();
+    });
+  };
+  ctx.effect(() => {
+    const observer = new MutationObserver(queue);
+    observer.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("resize", queue);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", queue);
+    };
+  });
+}
+
 export function apply(ctx) {
+  recipientListPlacement(ctx);
   applyRecommendedOnce();
   profileCardAbove(ctx);
   nameHoverProfileCard(ctx);
