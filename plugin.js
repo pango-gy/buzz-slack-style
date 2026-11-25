@@ -1428,6 +1428,31 @@ ${CARD} [data-profile-action] span[aria-hidden="true"] {
   background: color-mix(in srgb, var(--text-standard) 8%, transparent) !important;
 }
 [aria-label="Recipients"] { font-size: 15px; }
+/* Title row "새 메시지" on top (Buzz has none), shaped like the channel
+   header, and Slack's 48px "대상:" row under it. */
+section[aria-label="New message"]::before {
+  content: ${JSON.stringify(t("새 메시지", "New message"))};
+  display: flex;
+  align-items: center;
+  flex: none;
+  box-sizing: border-box;
+  height: ${HEADER.titleRow}px;
+  padding: 0 ${HEADER.inset}px;
+  font-size: ${SIZES.channelTitle}px;
+  font-weight: ${CHANNEL_TITLE_WEIGHT};
+  color: var(--text-standard);
+  border-bottom: 1px solid var(--border-standard);
+}
+section[aria-label="New message"] [aria-label="Recipients"] {
+  min-height: 48px !important;
+  padding: 0 ${HEADER.inset}px !important;
+  display: flex !important;
+  align-items: center !important;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--border-standard);
+}
+section[aria-label="New message"] [aria-label="Recipients"] label { color: var(--text-subtle); }
+section[aria-label="New message"] [aria-label="Recipients"] input { font-size: 15px !important; }
 
 /* Mention picker opened from the @ button: the same flat Slack list as the
    @ suggestions (32px rows, 20px rounded pictures, bold name with its detail
@@ -1832,7 +1857,7 @@ const TRANSLATIONS = LANG === "en" ? {} : {
   // New message (DM) screen.
   "To:": "대상:",
   "Find a person…": "사람 이름으로 찾기…",
-  "Find a person or channel…": "#채널 또는 사람 이름으로 찾기…",
+  "Find a person or channel…": "#채널, @사람 이름으로 찾기…",
   "Add another person…": "다른 사람 추가…",
   "Sending message…": "메시지 보내는 중…",
   "Uploading files…": "파일 올리는 중…",
