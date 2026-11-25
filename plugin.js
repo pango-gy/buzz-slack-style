@@ -271,6 +271,25 @@ const PINNED_ROW_HEIGHT = 28;
 // Extra left indent (px) of channel rows under a section title.
 const SECTION_INDENT = 10;
 
+// Menus (right-click, ⋯) styled like Slack's, with this row color under the
+// pointer. Set SLACK_MENUS to false to keep Buzz's menus.
+const SLACK_MENUS = true;
+const MENU_HIGHLIGHT = "#1264A3";
+// Current choice in "다음에 대해 알림…" (light and dark mode).
+const MENU_SELECTED = "#1264A3";
+const MENU_SELECTED_DARK = "#1D9BD1";
+// @mention chips in messages (Slack's colors).
+const MENTION_CHIP = {
+  bg: "rgba(29, 155, 209, 0.1)",
+  hover: "rgba(29, 155, 209, 0.2)",
+  text: "#1264A3",
+  textDark: "#1D9BD1",
+  selfBg: "rgba(242, 199, 68, 0.4)",
+  selfHover: "rgba(242, 199, 68, 0.6)",
+};
+// Sidebar marker for channels with a mention or a DM (Slack's red).
+const MENTION_DOT = "#E01E5A";
+
 // Corner radius of sidebar rows (Slack is about 6px; Buzz uses a pill).
 const ROW_RADIUS = 6;
 
@@ -1206,13 +1225,77 @@ ${CHANNEL_TABS ? `/* Tab row under the channel name (added by addChannelTabs), p
   cursor: pointer;
 }` : ""}
 
-/* "다음에 대해 알림…" items added to a channel's right-click menu. */
-.slack-notify-option { cursor: default; }
-.slack-notify-option:hover {
-  background: color-mix(in srgb, var(--text-standard) 8%, transparent);
+/* Menus (right-click, ⋯ and submenus) shaped like Slack's: 8px corners,
+   full-width 28px rows, 15px text, a blue row under the pointer. */
+${SLACK_MENUS ? `
+.buzz-menu-popup {
+  border-radius: 8px !important;
+  corner-shape: round !important;
+  padding: 6px 0 !important;
+  min-width: 240px !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text-standard) 13%, transparent), 0 4px 12px rgba(0, 0, 0, 0.12) !important;
 }
-.slack-notify-option[aria-checked="true"] .slack-notify-check { color: var(--text-standard); }
+.buzz-menu-popup .buzz-menu-item {
+  min-height: 28px !important;
+  margin: 0 !important;
+  padding: 0 20px 0 14px !important;
+  border-radius: 0 !important;
+  corner-shape: round !important;
+  font-size: 15px !important;
+}
+.buzz-menu-popup .buzz-menu-item:is([data-highlighted], [data-popup-open], .slack-notify-option:hover):not([data-disabled]) {
+  background: ${MENU_HIGHLIGHT} !important;
+  color: #fff !important;
+  --text-standard: #fff;
+  --text-subtle: #fff;
+  --text-metadata: #fff;
+}
+.buzz-menu-popup .buzz-menu-separator { margin: 6px 0 !important; }
+.buzz-menu-popup .buzz-menu-group-label {
+  padding: 4px 20px 2px 14px !important;
+  font-size: 13px !important;
+  color: var(--text-subtle) !important;
+}
+` : ""}
+/* "다음에 대해 알림…" items added to a channel's right-click menu: a check
+   column, an icon, and Slack's blue for the current choice. */
+.slack-notify-option { cursor: default; display: flex; align-items: center; position: relative; }
+.slack-notify-check {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 14px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.slack-notify-check svg { width: 12px; height: 12px; }
+.slack-notify-icon svg { width: 16px; height: 16px; stroke-width: 2; }
+.slack-notify-option[aria-checked="true"] { color: ${MENU_SELECTED}; }
+:root[data-color-mode="dark"] .slack-notify-option[aria-checked="true"] { color: ${MENU_SELECTED_DARK}; }
+.buzz-menu-popup .buzz-menu-item.slack-notify-option:hover { color: #fff !important; }
 .slack-notify-label { padding-top: 2px; }
+
+/* @mentions in messages: Slack's light blue chip with blue text, and
+   yellow when it mentions you (Buzz: a black pill). */
+[data-mention-kind] {
+  border-radius: 3px !important;
+  corner-shape: round !important;
+  padding: 0 2px !important;
+  font-weight: 400 !important;
+  background: ${MENTION_CHIP.bg} !important;
+  color: ${MENTION_CHIP.text} !important;
+  --link-text: ${MENTION_CHIP.text};
+}
+[data-mention-kind]:hover { background: ${MENTION_CHIP.hover} !important; text-decoration: none !important; }
+[data-mention-kind][data-mention-self] {
+  background: ${MENTION_CHIP.selfBg} !important;
+  color: var(--text-standard) !important;
+}
+[data-mention-kind][data-mention-self]:hover { background: ${MENTION_CHIP.selfHover} !important; }
+:root[data-color-mode="dark"] [data-mention-kind]:not([data-mention-self]) { color: ${MENTION_CHIP.textDark} !important; }
+
+/* Mention and DM marker on a sidebar row: Buzz draws a black dot; Slack
+   marks these in red. */
+${SIDEBAR} [data-channel-priority] {
+  background: ${MENTION_DOT} !important;
+  box-shadow: none !important;
+}
 
 /* Message author names: Buzz uses medium (500); Slack shows them bold. */
 [data-copy-author] strong,
@@ -2207,10 +2290,15 @@ function addChannelNotifyMenu(ctx) {
   const CHECK = "M20 6 9 17l-5-5";
   const svg = (d) =>
     `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+  const BELL = "M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0";
   const options = [
-    { id: "all", label: t("모든 새 포스트", "All new posts") },
-    { id: "mentions", label: t("멘션만", "Mentions only") },
-    { id: "mute", label: t("음소거", "Mute") },
+    { id: "all", label: t("모든 새 포스트", "All new posts"), icon: `${BELL}M4 2C2.8 3.7 2 5.7 2 8M22 8c0-2.3-.8-4.3-2-6` },
+    { id: "mentions", label: t("멘션만", "Mentions only"), icon: BELL },
+    {
+      id: "mute",
+      label: t("음소거", "Mute"),
+      icon: "M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7M10.3 21a1.94 1.94 0 0 0 3.4 0M2 2l20 20",
+    },
   ];
 
   const muteItemOf = (popup) =>
@@ -2272,7 +2360,8 @@ function addChannelNotifyMenu(ctx) {
           .map(
             (o) =>
               `<div class="buzz-menu-item slack-notify-option" role="menuitemradio" tabindex="-1" data-option="${o.id}">` +
-              `<span class="buzz-menu-icon slack-notify-check" aria-hidden="true"></span>${o.label}</div>`,
+              `<span class="slack-notify-check" aria-hidden="true"></span>` +
+              `<span class="buzz-menu-icon slack-notify-icon" aria-hidden="true">${svg(o.icon)}</span>${o.label}</div>`,
           )
           .join("") +
         `<div class="buzz-menu-separator" role="separator"></div>`;
