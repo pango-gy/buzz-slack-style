@@ -13,6 +13,8 @@ A plugin that makes the Buzz desktop app look and feel like Slack.
 - A tab row under the channel name: **Messages · Files · Canvas**, with a list of the channel's files
 - **Alerts for every new channel message**, like Slack's "All new messages" (Buzz alone only alerts for mentions, DMs and thread replies)
 - Profile card: hovering a picture or a name opens a Slack-style card above it (large picture and name, local time, Profile/Message buttons)
+- **Link previews**: a Slack-style card with the title, description, site and picture under each web link in a message (see "Link previews" below)
+- Right-click the Direct messages title for hidden and muted DMs; **Mute and hide** in a DM's right-click menu
 - Finer details: the message hover toolbar, selected channel rows, date dividers, the new-messages line, code blocks and more
 
 ## Install
@@ -67,6 +69,14 @@ Click **Disable** under **Manage plugins → Slack Style** and Buzz returns to i
 - Only the community that is currently open can alert.
 - This relies on Buzz's internal live message feed, which is not a documented plugin API. If a Buzz update changes it, channel alerts stop; nothing else is affected.
 
+## Link previews
+
+- When a message has an `https://` link, a card with the page's title, description, site name and picture appears under it. Clicking the card opens the link.
+- **Buzz itself** reads the card's content from that page (`host.readPage`). It reads only the page's head, hands the plugin only the title, description and image addresses, and sends no cookies. This is how Slack builds link previews too.
+- So when a link shows in a message, your computer visits that site. Addresses that are not public, such as internal ones, are not read and get no card.
+- Because of this, installing or updating asks you to approve **reading public web pages and images** (`publicPages`, `publicImages`).
+- To turn the cards off, set `LINK_PREVIEWS` in `plugin.js` to `false`.
+
 ## Good to know
 
 - Tuned for Buzz **1.0.6 with the English interface**. On other versions some styles may not apply. The app does not break; those parts just fall back to Buzz's default look.
@@ -75,7 +85,7 @@ Click **Disable** under **Manage plugins → Slack Style** and Buzz returns to i
 - While the formatting bar is open, Buzz hides the @, file and emoji buttons. Close the bar with the **X** on its left to bring them back.
 - Message text and what you type are never translated or changed.
 - Korean text uses Noto Sans KR only on computers that have it installed; others keep the system font.
-- Buzz plugins run inside the app without restrictions. This plugin changes how Buzz looks and adds the alerts above; it does not send any data outside Buzz.
+- Buzz plugins run inside the app without restrictions. This plugin changes how Buzz looks and adds the alerts above; it does not send any data outside Buzz. The one exception is link previews: Buzz reads the page of a link in a message (see "Link previews" above).
 
 ## Settings
 
@@ -109,6 +119,8 @@ All settings are constants near the top of `plugin.js`. After editing, reload th
 | `ROW_RADIUS`, `SECTION_INDENT`, `PINNED_ROW_HEIGHT` | Sidebar row corners, section indent, pinned row height |
 | `MENTION_SELECTED`, `INLINE_CODE_COLOR`, `NEW_LINE_COLOR` | Selected @mention suggestion, inline code text, the new-messages line |
 | `SEARCH_HEIGHT` | Height of the search box at the top |
+| `LINK_PREVIEWS` | Link preview cards on or off |
+| `DM_SECTION_MENU` | Right-click menu on the Direct messages title (hidden and muted DMs) on or off |
 
 ## Development
 

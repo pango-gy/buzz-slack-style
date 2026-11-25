@@ -32,7 +32,7 @@ function pickLanguage() {
 const LANG = pickLanguage();
 const t = (ko, en) => (LANG === "en" ? en : ko);
 
-export const inject = ["react", "pages", "navigation", "panels", "relay", "notifications", "settingsCards"];
+export const inject = ["react", "pages", "navigation", "panels", "relay", "notifications", "settingsCards", "conversation", "host"];
 
 // Slack-style shortcuts pinned at the top of the Messages sidebar, next to
 // Activity. Each row opens Buzz's own Activity page with that tab already
@@ -1676,6 +1676,24 @@ ${SLACK_MENUS ? `
 .buzz-menu-popup .buzz-menu-item.slack-notify-option:hover,
 .buzz-menu-popup .buzz-menu-item.slack-notify-option:hover .slack-notify-icon { color: #fff !important; }
 .slack-notify-label { padding-top: 2px; }
+/* Link preview card under a message, like Slack's: a bordered card with the
+   title, description and site, and the page's picture on the right. */
+.slack-link-card {
+  display: flex; align-items: stretch;
+  width: 560px; max-width: 100%; min-height: 0;
+  border: 1px solid color-mix(in srgb, var(--text-standard) 13%, transparent);
+  border-radius: 8px; corner-shape: round; overflow: hidden;
+  background: var(--surface-panel, transparent);
+  color: var(--text-standard) !important; text-decoration: none !important;
+  margin-top: 4px;
+}
+.slack-link-card:hover { border-color: color-mix(in srgb, var(--text-standard) 25%, transparent); }
+.slack-link-card-text { flex: 1; min-width: 0; padding: 12px 16px; display: flex; flex-direction: column; gap: 4px; }
+.slack-link-card-title { font-size: 15px; font-weight: 700; line-height: 22px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.slack-link-card-description { font-size: 14px; line-height: 20px; color: var(--text-standard); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.slack-link-card-site { display: flex; align-items: center; gap: 6px; font-size: 13px; line-height: 18px; color: var(--text-subtle); margin-top: 2px; }
+.slack-link-card-icon { width: 16px; height: 16px; border-radius: 3px; object-fit: contain; flex: none; }
+.slack-link-card-image { width: 120px; flex: none; object-fit: cover; border-left: 1px solid color-mix(in srgb, var(--text-standard) 8%, transparent); }
 /* The 다이렉트 메시지 title's right-click menu, built by this plugin. */
 .slack-dm-menu {
   position: fixed; z-index: 1000;
@@ -3117,6 +3135,144 @@ function dmSectionMenu(ctx) {
   });
 }
 
+// Link previews: a Slack-style card under a message for each web link, with
+// the page's title, description, site name and picture. Buzz 1.0.6 has no
+// card for ordinary web links. Buzz itself reads the page (host.readPage,
+// granted by host.publicPages in manifest.json): it fetches only the page's
+// head and hands back these fields, never the page, with no cookies. The
+// picture and icon come the same way (host.publicImages). Nothing else is
+// sent anywhere. Set LINK_PREVIEWS to false to turn the cards off.
+const LINK_PREVIEWS = true;
+const LINK_PREVIEW_MAX_IMAGE = 5 * 1024 * 1024;
+const LINK_PREVIEW_HOPS = 4;
+
+function linkPreviewCards(ctx) {
+  const conversation = ctx.conversation;
+  const host = ctx.host;
+  if (!LINK_PREVIEWS || typeof conversation?.registerLinkPreview !== "function" || typeof host?.readPage !== "function") return;
+  const React = ctx.react;
+  const h = React.createElement;
+  const pages = new Map();
+  const images = new Map();
+
+  const https = (url) => {
+    try {
+      return new URL(url).protocol === "https:";
+    } catch {
+      return false;
+    }
+  };
+  // Buzz follows no redirect; each Location is checked here before asking again.
+  const readPage = async (url) => {
+    let at = url;
+    for (let hop = 0; hop < LINK_PREVIEW_HOPS; hop++) {
+      const page = await host.readPage(at, { timeoutMs: 8000 });
+      if (page?.location) {
+        const next = new URL(page.location, at).href;
+        if (!https(next)) return null;
+        at = next;
+        continue;
+      }
+      const p = page?.status >= 200 && page.status < 300 ? page.preview : undefined;
+      return p && (p.title || p.description) ? p : null;
+    }
+    return null;
+  };
+  const page = (url) => {
+    if (!pages.has(url)) pages.set(url, readPage(url).catch(() => null));
+    return pages.get(url);
+  };
+  const readImage = async (url) => {
+    if (typeof host.requestBytes !== "function") return null;
+    let at = url;
+    for (let hop = 0; hop < LINK_PREVIEW_HOPS; hop++) {
+      const res = await host.requestBytes({ url: at, maxBytes: LINK_PREVIEW_MAX_IMAGE, timeoutMs: 8000 });
+      const headers = Object.fromEntries(Object.entries(res?.headers ?? {}).map(([k, v]) => [k.toLowerCase(), v]));
+      if (res?.status >= 300 && res.status < 400 && headers.location) {
+        const next = new URL(headers.location, at).href;
+        if (!https(next)) return null;
+        at = next;
+        continue;
+      }
+      if (!(res?.status >= 200 && res.status < 300) || !res.body?.length) return null;
+      const type = String(headers["content-type"] || "").split(";")[0].trim();
+      if (!/^image\/(png|jpeg|gif|webp|avif)$/.test(type)) return null;
+      return URL.createObjectURL(new Blob([res.body], { type }));
+    }
+    return null;
+  };
+  const image = (url) => {
+    if (!url || !https(url)) return Promise.resolve(null);
+    if (!images.has(url)) images.set(url, readImage(url).catch(() => null));
+    return images.get(url);
+  };
+  const useAsync = (load, key) => {
+    const [value, set] = React.useState(null);
+    React.useEffect(() => {
+      let live = true;
+      set(null);
+      load(key).then((v) => live && set(v));
+      return () => {
+        live = false;
+      };
+    }, [key]);
+    return value;
+  };
+
+  function SlackLinkCard({ url, open }) {
+    const preview = useAsync(page, url);
+    const picture = useAsync(image, preview?.image ?? "");
+    const icon = useAsync(image, preview?.icon ?? "");
+    if (!preview) return null;
+    let site = preview.siteName;
+    if (!site) {
+      try {
+        site = new URL(url).hostname.replace(/^www\./, "");
+      } catch {}
+    }
+    const go = (event) => {
+      event.preventDefault();
+      open();
+    };
+    return h(
+      "a",
+      {
+        className: "slack-link-card",
+        href: url,
+        onClick: go,
+        title: url,
+        "data-has-image": picture ? "" : undefined,
+      },
+      h(
+        "div",
+        { className: "slack-link-card-text" },
+        preview.title && h("div", { className: "slack-link-card-title" }, preview.title),
+        preview.description && h("div", { className: "slack-link-card-description" }, preview.description),
+        site &&
+          h(
+            "div",
+            { className: "slack-link-card-site" },
+            icon && h("img", { className: "slack-link-card-icon", src: icon, alt: "" }),
+            h("span", null, site),
+          ),
+      ),
+      picture && h("img", { className: "slack-link-card-image", src: picture, alt: preview.imageAlt || "" }),
+    );
+  }
+
+  conversation.registerLinkPreview({
+    id: "slack-link-card",
+    title: t("링크 미리보기", "Link preview"),
+    // Other plugins' cards for their own links (GitHub and so on) win.
+    order: 100,
+    matches: https,
+    component: SlackLinkCard,
+  });
+  ctx.effect?.(() => () => {
+    for (const p of images.values()) p.then((u) => u && URL.revokeObjectURL(u));
+  });
+}
+
 // Group DMs set to "멘션만": saved per community on this computer.
 const dmMentionsOnly = {
   key: (scope) => `slack-style.dm-mentions-only.v1:${scope}`,
@@ -4048,6 +4204,7 @@ export function apply(ctx) {
   addChannelNotifyMenu(ctx);
   groupDmMentionGate(ctx);
   dmSectionMenu(ctx);
+  linkPreviewCards(ctx);
   addFormatBars(ctx);
   addDockNewButton(ctx);
   addChannelTabs(ctx);

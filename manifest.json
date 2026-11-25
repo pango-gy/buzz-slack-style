@@ -2,5 +2,9 @@
   "id": "team.slack-sidebar",
   "name": "Slack Style",
   "apiVersion": 1,
-  "description": "Makes Buzz look and feel like Slack: aubergine sidebar and dock, Korean menu names, Threads/Mentions/DMs shortcuts, Slack-sized text and a formatting bar above the message box."
+  "description": "Makes Buzz look and feel like Slack: aubergine sidebar and dock, Korean menu names, Threads/Mentions/DMs shortcuts, Slack-sized text and a formatting bar above the message box.",
+  "host": {
+    "publicPages": true,
+    "publicImages": true
+  }
 }
