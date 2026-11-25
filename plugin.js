@@ -301,7 +301,9 @@ const SIZES = {
   sidebarText: 15, // channel, pinned row and section title text
   messageText: 15, // message body and author name
   messageLine: 22, // message line height
-  channelTitle: 17, // channel name above the conversation
+  messageTime: 12, // time next to the name
+  messageAvatar: 36, // picture beside a message
+  channelTitle: 18, // channel name above the conversation
 };
 
 // People in the sidebar's direct-message list: picture size and corner
@@ -319,7 +321,7 @@ const MESSAGE_INDENT = 5;
 const AVATAR_GAP = 8;
 
 // Space above/below each message in a run from one person (Buzz: 4).
-const STACK_GAP = 3;
+const STACK_GAP = 4;
 
 // Dock labels to replace, keyed by part of the dock tab's page id:
 // Messages (buzz.channels) becomes 홈 like Slack; "Create an agent" (the
@@ -380,7 +382,10 @@ const NEW_LINE_COLOR = "#E01E5A";
 // Weight of names above messages: 700 bold, 800 heavier, 900 black.
 const AUTHOR_WEIGHT = 800;
 // Weight of the channel name in the conversation header.
-const CHANNEL_TITLE_WEIGHT = 700;
+const CHANNEL_TITLE_WEIGHT = 800;
+// Channel header spacing (px): title row height, tab row height, gap between
+// tabs, and the left inset shared by the title and the tabs.
+const HEADER = { titleRow: 49, tabRow: 40, tabGap: 12, inset: 20 };
 
 // Buzz's Activity row: no title while its hover preview is on, otherwise
 // titled "Activity".
@@ -852,12 +857,60 @@ ${SIDEBAR} details > summary :not(svg, svg *) {
   color: ${c.text} !important;
   font-weight: 400 !important;
 }
-/* Message text and bylines. */
+/* Message text, bylines and pictures at Slack's fixed sizes, so they stay
+   the same whatever Buzz's Interface size is. Buzz sizes message text with
+   --text-message (a size and a unitless line-height ratio). */
 [data-highlight-surface] {
+  --text-message: ${SIZES.messageText}px;
+  --text-message--line-height: ${(SIZES.messageLine / SIZES.messageText).toFixed(4)};
   --text-body: ${SIZES.messageText}px;
   --text-body--line-height: ${SIZES.messageLine}px;
 }
 [data-highlight-surface] [data-copy-author] strong { font-size: ${SIZES.messageText}px !important; }
+/* The message box uses the same --text-message size as messages. */
+[data-composer-surface] {
+  --text-message: ${SIZES.messageText}px;
+  --text-message--line-height: ${(SIZES.messageLine / SIZES.messageText).toFixed(4)};
+}
+[data-highlight-surface] [data-copy-author] time,
+[data-highlight-surface] [class*="_continuationTime_"] {
+  font-size: ${SIZES.messageTime}px !important;
+}
+/* Picture column: the picture and the empty column of follow-up lines are
+   the same width, so text stays aligned under the name. */
+[data-highlight-surface] :is([class*="_messageAvatar_"], [class*="_messageGutter_"]) {
+  flex: 0 0 ${SIZES.messageAvatar}px !important;
+  width: ${SIZES.messageAvatar}px !important;
+  min-width: ${SIZES.messageAvatar}px !important;
+}
+[data-highlight-surface] [class*="_messageAvatar_"] :is(button, .buzz-avatar-status, .buzz-avatar, .buzz-avatar img) {
+  width: ${SIZES.messageAvatar}px !important;
+  height: ${SIZES.messageAvatar}px !important;
+  min-width: 0 !important;
+}
+/* In Compact density the picture sits elsewhere; every message picture is
+   the profile-card trigger button, so size that button, its box and the
+   picture inside it directly. */
+[data-highlight-surface] :has(> [data-preview-card-trigger]):not([data-thread-summary] *) {
+  flex: 0 0 ${SIZES.messageAvatar}px !important;
+  width: ${SIZES.messageAvatar}px !important;
+  min-width: ${SIZES.messageAvatar}px !important;
+  height: auto !important;
+}
+[data-highlight-surface] [data-preview-card-trigger]:not([data-thread-summary] *),
+[data-highlight-surface] [data-preview-card-trigger]:not([data-thread-summary] *) :is(.buzz-avatar-status, .buzz-avatar, .buzz-avatar img) {
+  width: ${SIZES.messageAvatar}px !important;
+  height: ${SIZES.messageAvatar}px !important;
+  min-width: 0 !important;
+  max-width: none !important;
+}
+[data-highlight-surface] [data-preview-card-trigger]:not([data-thread-summary] *) { padding: 0 !important; }
+/* Buzz wraps the picture in a padded round button; drop the padding so the
+   picture itself is the full size. */
+[data-highlight-surface] [class*="_messageAvatar_"] button {
+  padding: 0 !important;
+  --size-icon-button: ${SIZES.messageAvatar}px;
+}
 
 /* Hover toolbar on a message: Slack's rounded rectangle with square-ish
    buttons instead of Buzz's pill. */
@@ -1387,15 +1440,22 @@ ${ROW}:is([data-selected], [data-highlighted], [aria-selected="true"], :hover) s
 ${CHANNEL_TABS ? `/* Tab row under the channel name (added by addChannelTabs), placed right
    after the header; the dividing line moves below the row. */
 .panel-header:has(+ .slack-channel-tabs) { border-block-end-color: transparent !important; }
+/* Slack's roomier header: a 49px title row and a 40px tab row. */
+.panel-header:has(+ .slack-channel-tabs) {
+  height: ${HEADER.titleRow}px !important;
+  min-height: ${HEADER.titleRow}px !important;
+  padding-inline: ${HEADER.inset}px 16px !important;
+  box-sizing: border-box;
+}
 .slack-channel-tabs {
   flex: none;
   width: 100%;
   border-bottom: 1px solid var(--border-standard);
   display: flex;
   align-items: stretch;
-  gap: 4px;
-  height: 34px;
-  padding-inline: 12px;
+  gap: ${HEADER.tabGap}px;
+  height: ${HEADER.tabRow}px;
+  padding-inline: ${HEADER.inset - 8}px;
   box-sizing: border-box;
 }
 .slack-channel-tabs > button {
@@ -1416,7 +1476,7 @@ ${CHANNEL_TABS ? `/* Tab row under the channel name (added by addChannelTabs), p
   color: var(--text-standard);
   border-bottom-color: var(--text-standard);
 }
-.slack-channel-tabs > button svg { width: 15px; height: 15px; flex: none; }
+.slack-channel-tabs > button svg { width: 16px; height: 16px; flex: none; }
 /* The selected tab's icon is filled, as in Slack; lines inside it are drawn
    in the background color so they stay visible. */
 .slack-channel-tabs > button[data-active] svg path:first-child { fill: currentColor; }
