@@ -1143,7 +1143,45 @@ ${POP} [role="option"][aria-selected="true"] {
 ${POP} [role="option"][aria-selected="true"] small { color: #fff !important; }`;
 })()}
 
-/* @here / @channel rows added to the top of the @ suggestions. */
+/* Mentions inside the message box: Buzz keeps each one as a token whose
+   data-source is the Nostr address; shown as the same chip as in messages. */
+[data-composer-surface] [data-source^="nostr:npub"],
+[data-composer-surface] [data-source^="nostr:nprofile"] {
+  border-radius: 3px;
+  padding: 0 2px;
+  background: ${MENTION_CHIP.bg};
+  color: ${MENTION_CHIP.text};
+}
+:root[data-color-mode="dark"] [data-composer-surface] :is([data-source^="nostr:npub"], [data-source^="nostr:nprofile"]) {
+  color: ${MENTION_CHIP.textDark};
+}
+/* @here / @channel / @everyone are plain text, so they are painted with a
+   text highlight (no change to the text itself): yellow, as they notify you. */
+::highlight(slack-broadcast) {
+  background-color: ${MENTION_CHIP.selfBg};
+}
+
+/* @here / @channel rows added to the top of the @ suggestions, and the
+   small list of our own shown when Buzz has no suggestions. */
+.slack-broadcast-popup {
+  position: fixed;
+  z-index: 1000;
+  min-width: 300px;
+  padding: 8px 0;
+  border-radius: 8px;
+  background: var(--surface-popover, var(--surface-panel, #fff));
+  color: var(--text-standard);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text-standard) 13%, transparent), 0 4px 12px rgba(0, 0, 0, 0.12);
+  font-size: 15px;
+}
+.slack-broadcast-popup [role="option"] { gap: 8px; padding: 4px 16px; min-height: 32px; box-sizing: border-box; }
+.slack-broadcast-popup [data-completion-label] { display: flex; gap: 8px; align-items: baseline; white-space: nowrap; }
+.slack-broadcast-popup small { font-size: 15px; color: var(--text-subtle); }
+.slack-broadcast-popup [role="option"][aria-selected="true"] {
+  background: ${MENTION_SELECTED};
+  color: #fff;
+}
+.slack-broadcast-popup [role="option"][aria-selected="true"] small { color: #fff; }
 [data-slack-broadcast] { cursor: default; display: flex; align-items: center; }
 [data-slack-broadcast] .slack-broadcast-icon {
   display: inline-flex; align-items: center; justify-content: center;
@@ -3123,9 +3161,72 @@ function broadcastSuggestions(ctx) {
     document.execCommand("insertText", false, `@${word} `);
   };
   const svg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${MEGAPHONE}"/></svg>`;
+  // When no person matches (e.g. "@he"), Buzz removes its list altogether,
+  // so the rows go in a small list of our own above the cursor instead.
+  let own;
+  const closeOwn = () => {
+    own?.remove();
+    own = undefined;
+  };
+  const showOwn = (at, want) => {
+    if (!own) {
+      own = document.createElement("div");
+      own.className = "slack-broadcast-popup";
+      own.setAttribute("role", "listbox");
+      document.body.appendChild(own);
+    }
+    const key = want.map((b) => b.word).join(",");
+    if (own.dataset.key !== key) {
+      own.dataset.key = key;
+      own.innerHTML = "";
+      own.append(...want.map((b, i) => makeRow(b, i === 0)));
+    }
+    const range = document.createRange();
+    range.setStart(at.node, Math.max(0, at.end - at.query.length - 1));
+    range.setEnd(at.node, at.end);
+    const rect = range.getBoundingClientRect();
+    const height = own.offsetHeight || 80;
+    own.style.left = `${Math.max(8, rect.left - 12)}px`;
+    own.style.top = `${Math.max(8, rect.top - height - 8)}px`;
+  };
+  const makeRow = (b, active) => {
+    const row = document.createElement("div");
+    row.setAttribute("role", "option");
+    row.setAttribute("aria-selected", active ? "true" : "false");
+    row.dataset.slackBroadcast = b.word;
+    row.innerHTML =
+      `<span aria-hidden="true" class="slack-broadcast-icon">${svg}</span>` +
+      `<span data-completion-label><span><b>@${b.word}</b></span><small>${b.detail}</small></span>`;
+    row.addEventListener("pointerdown", (event) => event.preventDefault());
+    row.addEventListener("mousedown", (event) => event.preventDefault());
+    row.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      choose(b.word);
+      closeOwn();
+    });
+    return row;
+  };
+  // Enter or Tab picks the highlighted row of our own list (Buzz has none).
+  const onKey = (event) => {
+    if (!own || !["Enter", "Tab", "Escape"].includes(event.key) || event.isComposing) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (event.key !== "Escape") {
+      const word = own.querySelector('[aria-selected="true"]')?.dataset.slackBroadcast;
+      if (word) choose(word);
+    }
+    closeOwn();
+  };
   const sync = () => {
     const list = document.querySelector('[data-mention] > [role="listbox"]');
-    const at = list && typedQuery();
+    const typed = typedQuery();
+    const typedWant = typed
+      ? BROADCAST_SUGGESTIONS.filter((b) => b.word.startsWith(typed.query.toLowerCase()))
+      : [];
+    if (!list && typed && typed.query && typedWant.length) showOwn(typed, typedWant);
+    else closeOwn();
+    const at = list && typed;
     const want = at ? BROADCAST_SUGGESTIONS.filter((b) => b.word.startsWith(at.query.toLowerCase())) : [];
     const current = list ? [...list.querySelectorAll(":scope > [data-slack-broadcast]")] : [];
     const key = want.map((b) => b.word).join(",");
@@ -3135,21 +3236,10 @@ function broadcastSuggestions(ctx) {
     const model = list.querySelector(':scope > [role="option"]');
     const label = model?.querySelector("[data-completion-label]");
     const rows = want.map((b) => {
-      const row = document.createElement("div");
-      row.setAttribute("role", "option");
-      row.setAttribute("aria-selected", "false");
-      row.dataset.slackBroadcast = b.word;
+      const row = makeRow(b, false);
       if (model) row.className = model.className;
-      row.innerHTML =
-        `<span aria-hidden="true" class="slack-broadcast-icon">${svg}</span>` +
-        `<span data-completion-label class="${label?.className ?? ""}"><span><b>@${b.word}</b></span><small>${b.detail}</small></span>`;
-      row.addEventListener("pointerdown", (event) => event.preventDefault());
-      row.addEventListener("mousedown", (event) => event.preventDefault());
-      row.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        choose(b.word);
-      });
+      const rowLabel = row.querySelector("[data-completion-label]");
+      if (label && rowLabel) rowLabel.className = label.className;
       return row;
     });
     list.prepend(...rows);
@@ -3158,15 +3248,64 @@ function broadcastSuggestions(ctx) {
     const observer = new MutationObserver(sync);
     observer.observe(document.body, { childList: true, subtree: true });
     document.addEventListener("selectionchange", sync);
+    document.addEventListener("keydown", onKey, true);
     return () => {
       observer.disconnect();
       document.removeEventListener("selectionchange", sync);
+      document.removeEventListener("keydown", onKey, true);
+      closeOwn();
       document.querySelectorAll("[data-slack-broadcast]").forEach((el) => el.remove());
     };
   });
 }
 
+// Paints @here / @channel / @everyone in the message box and in messages
+// with the CSS Custom Highlight API, which marks text ranges without touching
+// Buzz's DOM. Skipped on WebKit versions without it.
+function broadcastHighlights(ctx) {
+  if (!BROADCAST_MENTIONS || typeof Highlight === "undefined" || !globalThis.CSS?.highlights) return;
+  const highlight = new Highlight();
+  CSS.highlights.set("slack-broadcast", highlight);
+  const WORD = /(^|[\s(])(@(?:here|channel|everyone))(?=$|[\s.,!?)])/gi;
+  let queued = false;
+  const paint = () => {
+    queued = false;
+    highlight.clear();
+    const roots = document.querySelectorAll('[data-composer-surface] [contenteditable="true"], [data-highlight-surface]');
+    for (const root of roots) {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        const text = n.nodeValue;
+        if (!text || text.indexOf("@") < 0) continue;
+        WORD.lastIndex = 0;
+        for (let m = WORD.exec(text); m; m = WORD.exec(text)) {
+          const start = m.index + m[1].length;
+          const range = new Range();
+          range.setStart(n, start);
+          range.setEnd(n, start + m[2].length);
+          highlight.add(range);
+        }
+      }
+    }
+  };
+  const queue = () => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(paint);
+  };
+  ctx.effect(() => {
+    const observer = new MutationObserver(queue);
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    queue();
+    return () => {
+      observer.disconnect();
+      CSS.highlights.delete("slack-broadcast");
+    };
+  });
+}
+
 export function apply(ctx) {
+  broadcastHighlights(ctx);
   broadcastSuggestions(ctx);
   slackMentionButton(ctx);
   enhanceEmojiPickers(ctx);
