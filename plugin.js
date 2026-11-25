@@ -1894,6 +1894,7 @@ const TRANSLATIONS = LANG === "en" ? {} : {
   "Copy link": "링크 복사",
   "Leave channel": "채널 나가기",
   "Leave conversation": "대화 나가기",
+  "Close conversation": "대화 닫기",
   "Create new…": "새로 만들기…",
   "Create new...": "새로 만들기…",
   Unfiled: "미분류",
@@ -2893,31 +2894,36 @@ function addChannelNotifyMenu(ctx) {
     const mute = muteItemOf(popup);
     if (!mute) return;
     const channel = channelOf(popup, session);
-    if (!channel || channel.huddle || channel.channelType === "dm" || channel.channelType === "solo") return;
+    if (!channel || channel.huddle || channel.channelType === "solo") return;
+    const dm = channel.channelType === "dm";
+    // A group DM has three or more people; a 1:1 DM has no "멘션만".
+    const group = dm && Array.isArray(channel.members) && channel.members.length > 2;
     const scope = typeof session.scope === "string" ? session.scope : "";
     const isMuted = () => /^(Unmute|음소거 해제)$/.test(mute.textContent.trim());
-    const state = () => (isMuted() ? "mute" : channelWanted(scope, channel) ? "all" : "mentions");
+    const mentionsOnly = () => (dm ? dmMentionsOnly.read(scope).has(channel.id) : !channelWanted(scope, channel));
+    const state = () => (isMuted() ? "mute" : mentionsOnly() ? "mentions" : "all");
+    const shown = options.filter((o) => !(dm && o.id === "mentions" && !group));
 
-    let group = popup.querySelector(".slack-notify-group");
-    if (!group || group.dataset.channel !== channel.id) {
-      group?.remove();
-      group = document.createElement("div");
-      group.className = "slack-notify-group";
-      group.dataset.channel = channel.id;
-      group.setAttribute("role", "group");
-      group.innerHTML =
+    let box = popup.querySelector(".slack-notify-group");
+    if (!box || box.dataset.channel !== channel.id) {
+      box?.remove();
+      box = document.createElement("div");
+      box.className = "slack-notify-group";
+      box.dataset.channel = channel.id;
+      box.setAttribute("role", "group");
+      box.innerHTML =
         `<div class="buzz-menu-separator" role="separator"></div>` +
         `<div class="buzz-menu-group-label slack-notify-label">${t("다음에 대해 알림…", "Notify me about…")}</div>` +
-        options
+        shown
           .map(
             (o) =>
               `<div class="buzz-menu-item slack-notify-option" role="menuitemradio" tabindex="-1" data-option="${o.id}">` +
               `<span class="slack-notify-check" aria-hidden="true"></span>` +
-              `<span class="buzz-menu-icon slack-notify-icon" aria-hidden="true">${svg(o.icon)}</span>${o.label}</div>`,
+              `<span class="buzz-menu-icon slack-notify-icon" aria-hidden="true">${svg(o.icon)}</span>${dm && o.id === "all" ? t("모든 새 메시지", "All new messages") : o.label}</div>`,
           )
           .join("") +
         `<div class="buzz-menu-separator" role="separator"></div>`;
-      group.addEventListener("click", (event) => {
+      box.addEventListener("click", (event) => {
         const option = event.target.closest(".slack-notify-option")?.dataset.option;
         if (!option) return;
         event.preventDefault();
@@ -2927,13 +2933,13 @@ function addChannelNotifyMenu(ctx) {
           if (!muted) mute.click();
         } else {
           if (muted) mute.click();
-          const s2 = relay.snapshot().session;
-          setChannelAlert(scope, s2, relay.snapshot().viewer, channel.id, option === "all");
+          if (dm) dmMentionsOnly.set(scope, channel.id, option === "mentions");
+          else setChannelAlert(scope, relay.snapshot().session, relay.snapshot().viewer, channel.id, option === "all");
         }
         paint(popup, option);
         setTimeout(() => closeMenu(popup), 120);
       });
-      mute.before(group);
+      mute.before(box);
     }
     if (mute.style.display !== "none") mute.style.display = "none";
     paint(popup, state());
@@ -2950,6 +2956,48 @@ function addChannelNotifyMenu(ctx) {
       observer.disconnect();
       document.querySelectorAll(".slack-notify-group").forEach((el) => el.remove());
     };
+  });
+}
+
+// Group DMs set to "멘션만": saved per community on this computer.
+const dmMentionsOnly = {
+  key: (scope) => `slack-style.dm-mentions-only.v1:${scope}`,
+  read(scope) {
+    try {
+      const ids = JSON.parse(localStorage.getItem(this.key(scope)) || "[]");
+      return new Set(Array.isArray(ids) ? ids : []);
+    } catch {
+      return new Set();
+    }
+  },
+  set(scope, id, on) {
+    const ids = this.read(scope);
+    if (on) ids.add(id);
+    else ids.delete(id);
+    try {
+      localStorage.setItem(this.key(scope), JSON.stringify([...ids]));
+    } catch {}
+  },
+};
+
+// Buzz alerts for every message in a DM. For group DMs set to "멘션만", a
+// notification gate (a check Buzz runs before every alert) lets only
+// messages that mention you through.
+function groupDmMentionGate(ctx) {
+  const relay = ctx.relay;
+  if (typeof ctx.notifications?.gate !== "function" || !relay?.snapshot) return;
+  ctx.notifications.gate({
+    id: "group-dm-mentions-only",
+    allows(target) {
+      if (!target || target.kind !== "conversation" || !target.channelId) return true;
+      const snap = relay.snapshot();
+      const session = snap?.status === "ready" ? snap.session : undefined;
+      const scope = typeof session?.scope === "string" ? session.scope : "";
+      if (!scope || !dmMentionsOnly.read(scope).has(target.channelId)) return true;
+      if (!target.messageId) return false;
+      const attention = session.unread?.attention?.(target.channelId, target.messageId);
+      return !!attention?.mentioned;
+    },
   });
 }
 
@@ -3840,6 +3888,7 @@ export function apply(ctx) {
   registerLanguageSettings(ctx);
   startChannelAlerts(ctx);
   addChannelNotifyMenu(ctx);
+  groupDmMentionGate(ctx);
   addFormatBars(ctx);
   addDockNewButton(ctx);
   addChannelTabs(ctx);
