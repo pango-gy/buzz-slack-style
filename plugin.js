@@ -1804,9 +1804,10 @@ const TRANSLATIONS = LANG === "en" ? {} : {
   "Remove message": "메시지 삭제",
 };
 const TRANSLATION_PATTERNS = LANG === "en" ? [] : [
+  // Buzz writes "A is typing", "A, B are typing", "A, B and 3 others are typing".
   [/^(.+) and (\d+) others are typing$/, "$1 외 $2명이 입력 중입니다"],
-  [/^(.+) and (.+) are typing$/, "$1, $2 님이 입력 중입니다"],
-  [/^(.+) is typing$/, "$1 님이 입력 중입니다"],
+  [/^(.+) (?:is|are) typing$/, "$1 님이 입력 중입니다"],
+  [/^(.+) (?:is|are) working$/, "$1 작업 중"],
   [/^(.+) local time$/, "현지 시간 $1"],
   [/^Managed by (.+)$/, "$1 님이 관리"],
   [/^(\d+) repl(?:y|ies)$/, "답글 $1개"],
