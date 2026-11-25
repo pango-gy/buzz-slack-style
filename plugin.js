@@ -1706,13 +1706,6 @@ ${SLACK_MENUS ? `
 .slack-dm-menu .slack-dm-menu-empty { color: var(--text-subtle); }
 .slack-dm-menu-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .slack-dm-menu-item[data-unread] .slack-dm-menu-name { font-weight: ${UNREAD_WEIGHT}; }
-/* Slack's unread count: a red pill with white text. */
-.slack-dm-menu .slack-dm-menu-count {
-  min-width: 20px; height: 18px; padding: 0 6px; border-radius: 9px;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: #CD2553; color: #fff !important;
-  font-size: 12px; font-weight: 700; line-height: 1;
-}
 
 /* @mentions in messages: Slack's light blue chip with blue text, and
    yellow when it mentions you (Buzz: a black pill). */
@@ -3172,7 +3165,7 @@ function dmSectionMenu(ctx) {
       (b) => !b.closest("summary") && /new|start|message|메시지/i.test(b.getAttribute("aria-label") || b.title || ""),
     );
 
-    // Unread messages, as the DM's sidebar row would count them.
+    // Unread DMs are bold, as in Slack's menu (no count there).
     const unread = (id) => {
       try {
         const snap = session.unread?.snapshot?.({ kind: "channel", channelId: id });
@@ -3187,7 +3180,6 @@ function dmSectionMenu(ctx) {
       return (
         `<div class="buzz-menu-item slack-dm-menu-item" role="menuitem" tabindex="-1" data-channel="${esc(id)}"${n ? " data-unread=\"\"" : ""}>` +
         `<span class="slack-dm-menu-name">${esc(dmTitle(byId.get(id), session))}</span>` +
-        (n ? `<span class="buzz-menu-trailing slack-dm-menu-count">${n > 99 ? "99+" : n}</span>` : "") +
         `</div>`
       );
     };
