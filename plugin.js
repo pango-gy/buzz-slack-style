@@ -1704,6 +1704,15 @@ ${SLACK_MENUS ? `
 }
 .slack-dm-menu .buzz-menu-item { display: flex; align-items: center; cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .slack-dm-menu .slack-dm-menu-empty { color: var(--text-subtle); }
+.slack-dm-menu-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.slack-dm-menu-item[data-unread] .slack-dm-menu-name { font-weight: ${UNREAD_WEIGHT}; }
+/* Slack's unread count: a red pill with white text. */
+.slack-dm-menu .slack-dm-menu-count {
+  min-width: 20px; height: 18px; padding: 0 6px; border-radius: 9px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #CD2553; color: #fff !important;
+  font-size: 12px; font-weight: 700; line-height: 1;
+}
 
 /* @mentions in messages: Slack's light blue chip with blue text, and
    yellow when it mentions you (Buzz: a black pill). */
@@ -3163,8 +3172,25 @@ function dmSectionMenu(ctx) {
       (b) => !b.closest("summary") && /new|start|message|메시지/i.test(b.getAttribute("aria-label") || b.title || ""),
     );
 
-    const row = (id) =>
-      `<div class="buzz-menu-item slack-dm-menu-item" role="menuitem" tabindex="-1" data-channel="${esc(id)}">${esc(dmTitle(byId.get(id), session))}</div>`;
+    // Unread messages, as the DM's sidebar row would count them.
+    const unread = (id) => {
+      try {
+        const snap = session.unread?.snapshot?.({ kind: "channel", channelId: id });
+        const n = (snap?.row ?? snap)?.observedCount;
+        return Number.isFinite(n) && n > 0 ? n : 0;
+      } catch {
+        return 0;
+      }
+    };
+    const row = (id) => {
+      const n = unread(id);
+      return (
+        `<div class="buzz-menu-item slack-dm-menu-item" role="menuitem" tabindex="-1" data-channel="${esc(id)}"${n ? " data-unread=\"\"" : ""}>` +
+        `<span class="slack-dm-menu-name">${esc(dmTitle(byId.get(id), session))}</span>` +
+        (n ? `<span class="buzz-menu-trailing slack-dm-menu-count">${n > 99 ? "99+" : n}</span>` : "") +
+        `</div>`
+      );
+    };
     const list = (label, ids, empty) =>
       `<div class="buzz-menu-separator" role="separator"></div>` +
       `<div class="buzz-menu-group-label">${label}</div>` +
@@ -3195,7 +3221,8 @@ function dmSectionMenu(ctx) {
           if (open !== menu) return;
           menu.querySelectorAll(".slack-dm-menu-item[data-channel]").forEach((el) => {
             const channel = byId.get(el.dataset.channel);
-            if (channel) el.textContent = dmTitle(channel, session);
+            const name = el.querySelector(".slack-dm-menu-name");
+            if (channel && name) name.textContent = dmTitle(channel, session);
           });
         });
     }
