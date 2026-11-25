@@ -88,6 +88,18 @@ const THEMES = {
     text: "#D4D4D8", textMuted: "#A1A1AA", selected: "#D9D9DE", selectedText: "#1F1F22",
   },
 };
+// "직접 고르기": one color picked in Settings; the rest of the palette is
+// derived from it. Very light colors are darkened so white text stays readable.
+const CUSTOM_COLOR_KEY = "slack-style.custom-color.v1";
+const DEFAULT_CUSTOM_COLOR = "#4A2A4B";
+function savedCustomColor() {
+  try {
+    const saved = localStorage.getItem(CUSTOM_COLOR_KEY);
+    if (/^#[0-9a-f]{6}$/i.test(saved || "")) return saved;
+  } catch {}
+  return DEFAULT_CUSTOM_COLOR;
+}
+THEMES.custom = customTheme(savedCustomColor());
 const DEFAULT_THEME = "aubergine";
 // In Buzz's dark mode the top bar, left bar and sidebar get this much darker
 // (0 = same as light mode, 1 = black), like Slack's dark mode.
@@ -102,14 +114,44 @@ function savedTheme() {
   } catch {}
   return Object.hasOwn(THEMES, DEFAULT_THEME) ? DEFAULT_THEME : "aubergine";
 }
-// Switch COLORS to a theme; when the stylesheet is already on the page it is
-// rebuilt at once, so the change needs no reload.
+// Blend two #RRGGBB colors: amount 0 = a, 1 = b.
+function mixHex(a, b, amount) {
+  const parse = (hex) => {
+    const m = /^#([0-9a-f]{6})$/i.exec(hex);
+    return m ? [16, 8, 0].map((sh) => (parseInt(m[1], 16) >> sh) & 255) : undefined;
+  };
+  const x = parse(a);
+  const y = parse(b);
+  if (!x || !y) return a;
+  return `#${x.map((v, i) => Math.round(v + (y[i] - v) * amount).toString(16).padStart(2, "0")).join("")}`;
+}
 function mixWithBlack(hex, amount) {
+  return mixHex(hex, "#000000", amount);
+}
+// Relative luminance, 0 (black) to 1 (white).
+function luminance(hex) {
   const m = /^#([0-9a-f]{6})$/i.exec(hex);
-  if (!m) return hex;
-  const n = parseInt(m[1], 16);
-  const ch = (shift) => Math.round(((n >> shift) & 255) * (1 - amount));
-  return `#${[16, 8, 0].map((sh) => ch(sh).toString(16).padStart(2, "0")).join("")}`;
+  if (!m) return 0;
+  const [r, g, b] = [16, 8, 0].map((sh) => {
+    const v = ((parseInt(m[1], 16) >> sh) & 255) / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+// A full palette from one sidebar color.
+function customTheme(color) {
+  let sidebar = /^#[0-9a-f]{6}$/i.test(color || "") ? color : DEFAULT_CUSTOM_COLOR;
+  for (let i = 0; i < 20 && luminance(sidebar) > 0.13; i++) sidebar = mixWithBlack(sidebar, 0.12);
+  return {
+    name: t("직접 고르기", "Custom"),
+    chrome: mixWithBlack(sidebar, 0.22),
+    sidebar,
+    floating: mixHex(sidebar, "#ffffff", 0.16),
+    text: mixHex(sidebar, "#ffffff", 0.82),
+    textMuted: mixHex(sidebar, "#ffffff", 0.6),
+    selected: mixHex(sidebar, "#ffffff", 0.78),
+    selectedText: mixWithBlack(sidebar, 0.22),
+  };
 }
 // The stylesheet refers to every palette color as var(--ss-<name>), defined
 // once for light mode and once, darker, for Buzz's dark mode.
@@ -122,6 +164,8 @@ function buildThemedCss() {
 :root[data-color-mode="dark"] { ${vars(dark)} }
 ${buildCss(refs)}`;
 }
+// Switch COLORS to a theme; when the stylesheet is already on the page it is
+// rebuilt at once, so the change needs no reload.
 function switchTheme(id) {
   const { name, ...colors } = THEMES[id] ?? {};
   Object.assign(COLORS, BASE_COLORS, colors);
@@ -2261,6 +2305,16 @@ function registerLanguageSettings(ctx) {
   function LanguageSettings() {
     const [choice, setChoice] = React.useState(() => savedLanguage() ?? "auto");
     const [theme, setTheme] = React.useState(savedTheme);
+    const [custom, setCustom] = React.useState(savedCustomColor);
+    const pickCustom = (color) => {
+      if (!/^#[0-9a-f]{6}$/i.test(color)) return;
+      setCustom(color);
+      try {
+        localStorage.setItem(CUSTOM_COLOR_KEY, color);
+      } catch {}
+      THEMES.custom = customTheme(color);
+      pickTheme("custom");
+    };
     const pickTheme = (id) => {
       setTheme(id);
       try {
@@ -2322,6 +2376,18 @@ function registerLanguageSettings(ctx) {
       option("auto", "자동 · Automatic (computer language)"),
       h("h3", { style: { marginTop: "var(--space-3)" } }, t("색상", "Color")),
       h("div", { style: { display: "flex", flexWrap: "wrap", gap: "var(--space-2)" } }, Object.keys(THEMES).map(swatch)),
+      h(
+        "label",
+        { style: { display: "flex", alignItems: "center", gap: "var(--space-2)", cursor: "pointer" } },
+        h("input", {
+          type: "color",
+          value: custom,
+          onInput: (e) => pickCustom(e.target.value),
+          onChange: (e) => pickCustom(e.target.value),
+          style: { width: "40px", height: "28px", padding: 0, border: "none", background: "transparent", cursor: "pointer" },
+        }),
+        h("span", null, t("직접 고르기: 사이드바 색을 고르면 나머지 색이 맞춰집니다. 너무 밝은 색은 글자가 보이도록 어둡게 조정됩니다.", "Custom: pick a sidebar color and the other colors follow. Very light colors are darkened so text stays readable.")),
+      ),
       changed
         ? h("div", { style: { display: "flex", alignItems: "center", gap: "var(--space-3)" } },
             h("p", null, "적용하려면 Buzz 화면을 다시 불러옵니다. / Reload the Buzz window to apply."),

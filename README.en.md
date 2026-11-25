@@ -35,7 +35,7 @@ Recommended: **Settings → Appearance → Message density → Compact**
 Each person picks these under **Settings → Slack Style**.
 
 - **Language**: 한국어 / English / Automatic (computer language). English keeps Buzz's menus in their original English and shows this plugin's own labels in English too. Click **Reload** after changing it.
-- **Color**: Aubergine · Navy · Jade · Burgundy · Graphite. Applies right away.
+- **Color**: Aubergine · Navy · Jade · Burgundy · Graphite, or **Custom** (pick a sidebar color with the color picker and the other colors follow). Applies right away. Very light colors are darkened so text stays readable.
 - In Buzz's dark mode the sidebar and the top and left bars turn darker automatically.
 
 ### Turn it off or remove it
