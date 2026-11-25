@@ -37,9 +37,11 @@ Click **Disable** under **Manage plugins → Slack Style** and Buzz returns to i
 ## Channel message alerts
 
 - When someone else posts in a channel, a macOS alert shows **"#channel · sender"** with a preview of the message. Clicking it opens that message.
-- No alert for mentions, DMs and thread replies (Buzz already alerts for those), muted channels, your own messages, the channel you are viewing, or messages older than two minutes (catch-up after reconnecting).
+- No alert for mentions, DMs and thread replies (Buzz already alerts for those), muted channels, your own messages, or messages older than two minutes (catch-up after reconnecting).
+- No alert for a message Buzz marks read while its window is in front (the channel you have open). When Buzz is in the background, that channel alerts too. Alerts arrive about a second late so this can be checked.
 - **Settings → Notifications → 채널 메시지** turns these alerts on or off and sets their sound.
-- To alert only for some channels, list their names in `CHANNEL_ALERTS.channels` in `plugin.js`, e.g. `["notice_결제", "help_cto"]`.
+- Each person picks their channels under **Settings → 채널 메시지 알림** (all channels, or only selected ones). The choice is saved on their own computer.
+- People who have not picked yet get the default from `CHANNEL_ALERTS.channels` in `plugin.js` (`"all"` or a list of channel names).
 - Only the community that is currently open can alert.
 - This relies on Buzz's internal live message feed, which is not a documented plugin API. If a Buzz update changes it, channel alerts stop; nothing else is affected.
 
@@ -75,7 +77,7 @@ All settings are constants near the top of `plugin.js`. After editing, reload th
 | `COMPOSER_BORDER`, `COMPOSER_BORDER_FOCUS` | Message box border strength, idle and while typing |
 | `PLACEHOLDER_SUFFIX`, `PLACEHOLDERS` | Placeholder text in an empty message box |
 | `CHANNEL_TABS`, `FILES_PAGE` | Tab row under the channel name (Messages · Files · Canvas); messages the Files tab reads at a time |
-| `CHANNEL_ALERTS` | Channel message alerts: on/off, which channels, quiet while viewing |
+| `CHANNEL_ALERTS` | Channel message alerts: on/off, default channels, quiet while viewing |
 | `SLACK_CORNERS`, `CARD_RADIUS` | Corner size of menus, dialogs and buttons; sidebar and conversation corners |
 | `SLACK_FONTS`, `SLACK_LETTER_SPACING` | Use Noto Sans KR (where installed); zero letter spacing |
 | `FONT_SMOOTHING` | `""` Buzz default (thinner), `"auto"` slightly heavier |

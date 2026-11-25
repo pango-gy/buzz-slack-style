@@ -5,7 +5,7 @@
 // Overrides Buzz's internal classes and color variables, which can change
 // between Buzz versions. If they do, only the affected colors revert.
 
-export const inject = ["react", "pages", "navigation", "panels", "relay", "notifications"];
+export const inject = ["react", "pages", "navigation", "panels", "relay", "notifications", "settingsCards"];
 
 // Slack-style shortcuts pinned at the top of the Messages sidebar, next to
 // Activity. Each row opens Buzz's own Activity page with that tab already
@@ -1851,7 +1851,9 @@ function addChannelTabs(ctx) {
 // simply stop and nothing else is affected.
 const CHANNEL_ALERTS = {
   enabled: true,
-  // "all", or a list of channel names without #, e.g. ["notice_결제", "help_cto"].
+  // Default for people who have not picked channels in
+  // Settings → 채널 메시지 알림: "all", or a list of channel names without #,
+  // e.g. ["notice_결제", "help_cto"]. Each person's own choice wins.
   channels: "all",
   // Stay quiet for the channel you are looking at right now.
   skipWhileViewing: true,
@@ -1875,15 +1877,177 @@ function isViewingChannel(channelId) {
   return !!document.querySelector(`[data-channel-sidebar-row][data-selected][data-channel-id="${id}"]`);
 }
 
+// Settings → 채널 메시지 알림: each person picks the channels that alert.
+function registerAlertSettings(ctx) {
+  const cards = ctx.settingsCards;
+  if (!cards?.register) return;
+  const React = ctx.react;
+  const h = React.createElement;
+  const relay = ctx.relay;
+
+  function useLive() {
+    const [, bump] = React.useReducer((n) => n + 1, 0);
+    React.useEffect(() => {
+      let stopList = () => {};
+      const watch = () => {
+        stopList();
+        const session = relay.snapshot()?.session;
+        const sub = session?.channels?.subscribeList?.(bump);
+        stopList = typeof sub === "function" ? sub : () => {};
+        bump();
+      };
+      watch();
+      const stopRelay = relay.subscribe(watch);
+      alertChoice.listeners.add(bump);
+      return () => {
+        stopList();
+        if (typeof stopRelay === "function") stopRelay();
+        alertChoice.listeners.delete(bump);
+      };
+    }, []);
+  }
+
+  function ChannelAlertSettings() {
+    useLive();
+    const snap = relay.snapshot();
+    const session = snap?.status === "ready" ? snap.session : undefined;
+    const scope = typeof session?.scope === "string" ? session.scope : "";
+    const channels = alertableChannels(session, snap?.viewer);
+    const saved = scope ? alertChoice.read(scope) : undefined;
+    const choice = saved ?? {
+      mode: CHANNEL_ALERTS.channels === "all" ? "all" : "selected",
+      ids: channels.filter((c) => channelWanted(scope, c)).map((c) => c.id),
+    };
+    const set = (next) => scope && alertChoice.write(scope, next);
+    const toggle = (id, on) => {
+      const ids = new Set(choice.ids);
+      if (on) ids.add(id);
+      else ids.delete(id);
+      set({ mode: "selected", ids: [...ids] });
+    };
+    const row = { display: "flex", alignItems: "center", gap: "var(--space-2)", padding: "4px 0", cursor: "pointer" };
+
+    return h(
+      "section",
+      { style: { display: "flex", flexDirection: "column", gap: "var(--space-3)", padding: "var(--space-panel-inset)" } },
+      h("h2", null, "채널 메시지 알림"),
+      h(
+        "p",
+        { style: { color: "var(--text-subtle)" } },
+        "채널에 새 메시지가 오면 알림을 받을 채널을 고릅니다. 멘션·DM·스레드 답글은 여기 설정과 관계없이 Buzz 기본 알림으로 옵니다. 알림 소리와 전체 켜기/끄기는 Notifications의 '채널 메시지'에서 바꿉니다.",
+      ),
+      !session
+        ? h("p", null, "커뮤니티에 연결되면 채널 목록이 나타납니다.")
+        : h(
+            React.Fragment,
+            null,
+            h(
+              "label",
+              { style: row },
+              h("input", {
+                type: "radio",
+                name: "slack-style-alert-mode",
+                checked: choice.mode === "all",
+                onChange: () => set({ mode: "all", ids: choice.ids }),
+              }),
+              "모든 채널",
+            ),
+            h(
+              "label",
+              { style: row },
+              h("input", {
+                type: "radio",
+                name: "slack-style-alert-mode",
+                checked: choice.mode === "selected",
+                onChange: () => set({ mode: "selected", ids: choice.ids }),
+              }),
+              `고른 채널만 (${choice.ids.filter((id) => channels.some((c) => c.id === id)).length}개)`,
+            ),
+            h(
+              "div",
+              {
+                className: "ui-card",
+                style: {
+                  padding: "var(--space-2) var(--space-3)",
+                  maxHeight: "360px",
+                  overflowY: "auto",
+                  opacity: choice.mode === "all" ? 0.5 : 1,
+                },
+              },
+              channels.length === 0
+                ? h("p", null, "채널이 없습니다.")
+                : channels.map((c) =>
+                    h(
+                      "label",
+                      { key: c.id, style: row },
+                      h("input", {
+                        type: "checkbox",
+                        disabled: choice.mode === "all",
+                        checked: choice.mode === "all" || choice.ids.includes(c.id),
+                        onChange: (e) => toggle(c.id, e.target.checked),
+                      }),
+                      `# ${c.name}`,
+                    ),
+                  ),
+            ),
+          ),
+    );
+  }
+
+  cards.register({ id: "channel-alerts", title: "채널 메시지 알림", component: ChannelAlertSettings });
+}
+
+// Each person's channel choice, saved on this computer per community and
+// account: { mode: "all" | "selected", ids: [channelId, ...] }.
+const alertChoice = {
+  listeners: new Set(),
+  key: (scope) => `slack-style.channel-alerts.v1:${scope}`,
+  read(scope) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(this.key(scope)) || "null");
+      if (saved && (saved.mode === "all" || saved.mode === "selected") && Array.isArray(saved.ids)) return saved;
+    } catch {}
+    return undefined;
+  },
+  write(scope, choice) {
+    try {
+      localStorage.setItem(this.key(scope), JSON.stringify(choice));
+    } catch {}
+    this.listeners.forEach((listener) => listener());
+  },
+};
+
+// Whether a channel should alert for this person: their saved choice, else
+// the file default in CHANNEL_ALERTS.channels.
+function channelWanted(scope, channel) {
+  const choice = alertChoice.read(scope);
+  if (choice) return choice.mode === "all" || choice.ids.includes(channel.id);
+  const names = CHANNEL_ALERTS.channels;
+  return names === "all" || (Array.isArray(names) && names.includes(channel.name));
+}
+
+function alertableChannels(session, viewer) {
+  const list = session?.channels?.list?.().channels ?? [];
+  return list
+    .filter(
+      (c) =>
+        !c.huddle &&
+        c.channelType !== "dm" &&
+        c.channelType !== "solo" &&
+        (!Array.isArray(c.members) || c.members.includes(viewer)),
+    )
+    .sort((a, b) => String(a.name).localeCompare(String(b.name), "ko"));
+}
+
 function startChannelAlerts(ctx) {
   if (!CHANNEL_ALERTS.enabled) return;
   const relay = ctx.relay;
   const service = ctx.notifications;
   if (!relay?.snapshot || !relay?.subscribe || !service?.register) return;
   const category = service.register({ id: "channel-messages", label: "채널 메시지" });
+  registerAlertSettings(ctx);
   const submit = category?.submit;
   if (typeof submit !== "function") return;
-  const wanted = CHANNEL_ALERTS.channels === "all" ? undefined : new Set(CHANNEL_ALERTS.channels);
 
   ctx.effect(() => {
     let session;
@@ -1896,7 +2060,7 @@ function startChannelAlerts(ctx) {
     const decide = (owned, viewer, message) => {
       const channel = owned.channels?.list?.().channels?.find((c) => c.id === message.channelId);
       if (!channel || channel.huddle || channel.channelType === "dm" || channel.channelType === "solo") return false;
-      if (wanted && !wanted.has(channel.name)) return false;
+      if (!channelWanted(owned.scope, channel)) return false;
       const prefs = owned.sidebarPreferences?.snapshot?.();
       if (prefs?.data?.muted?.includes?.(message.channelId)) return false;
       const attention = owned.unread?.attention?.(message.channelId, message.messageId);
@@ -1907,6 +2071,16 @@ function startChannelAlerts(ctx) {
         // Replies inside threads are not channel messages in Slack either.
         if (attention.rootId && attention.rootId !== message.messageId) return false;
         if (CHANNEL_ALERTS.skipWhileViewing && attention.viewing) return false;
+        // Buzz's own rule: by now a message you are looking at (in any pane)
+        // has been marked read. Only trusted while Buzz is in front, since a
+        // channel Buzz does not track also reports "not unread".
+        if (
+          CHANNEL_ALERTS.skipWhileViewing &&
+          attention.unread === false &&
+          document.visibilityState === "visible" &&
+          document.hasFocus()
+        )
+          return false;
       }
       if (CHANNEL_ALERTS.skipWhileViewing && isViewingChannel(message.channelId)) return false;
       return channel;
