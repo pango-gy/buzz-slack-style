@@ -2698,7 +2698,8 @@ function previewText(text) {
 function isViewingChannel(channelId) {
   if (document.visibilityState !== "visible" || !document.hasFocus()) return false;
   const id = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(channelId) : channelId;
-  return !!document.querySelector(`[data-channel-sidebar-row][data-selected][data-channel-id="${id}"]`);
+  // The row carries data-selected; the button inside it carries the id.
+  return !!document.querySelector(`[data-channel-sidebar-row][data-selected] button[data-channel-id="${id}"]`);
 }
 
 // Settings → 채널 메시지 알림: each person picks the channels that alert.
@@ -3085,7 +3086,7 @@ function hiddenDmRows(ctx) {
     const ids = scope ? [...slackHiddenDms.read(scope)] : [];
     const esc = (id) => (typeof CSS !== "undefined" && CSS.escape ? CSS.escape(id) : id);
     const css = ids.length
-      ? `${ids.map((id) => `[data-channel-sidebar-row][data-channel-id="${esc(id)}"]:not([data-selected])`).join(",\n")} { display: none !important; }`
+      ? `${ids.map((id) => `[data-channel-sidebar-row]:not([data-selected]):has(button[data-channel-id="${esc(id)}"])`).join(",\n")} { display: none !important; }`
       : "";
     if (style.textContent !== css) style.textContent = css;
   };
