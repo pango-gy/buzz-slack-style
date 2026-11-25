@@ -35,18 +35,62 @@ const COLORS = {
   scrollbar: "rgba(255, 255, 255, 0.22)", // scrollbars on purple
 };
 
-// Text rendering: "auto" draws slightly fuller glyphs like Slack; set to ""
-// to keep Buzz's thinner "antialiased" rendering.
+// Text rendering. Slack uses "antialiased", the same as Buzz, so this stays
+// empty; "auto" draws heavier glyphs.
 const FONT_SMOOTHING = "";
 
-// Open Buzz's formatting toolbar (B, I, links, lists...) in every message box.
-const FORMATTING_ALWAYS_OPEN = true;
-// Height (px) of the formatting bar across the top of the message box.
+// Slack's font in Korean (read from Slack's own stylesheet): Noto Sans KR
+// for Korean and English alike, in two weights, Regular and Bold. Buzz uses
+// Inter plus the system Korean font. Buzz can't load fonts from the web, so
+// this applies only on computers that have Noto Sans KR or Noto Sans CJK KR
+// installed; otherwise Buzz's own fonts stay. Set to false to keep them.
+const SLACK_FONTS = true;
+
+// Buzz tightens the space between letters slightly; Slack uses none. Set to
+// false to keep Buzz's spacing.
+const SLACK_LETTER_SPACING = true;
+
+// Slack's formatting bar (B, I, links, lists...) across the top of every
+// message box, above Buzz's own row of buttons (@, files, emoji, send). Each
+// button presses the matching Buzz keyboard shortcut. Buzz's "Aa" button
+// shows and hides this bar (its own toolbar would replace that bottom row).
+const FORMAT_BAR = true;
+// Height (px) of the formatting bar.
 const FORMAT_BAR_HEIGHT = 38;
+// Buttons from the left; "|" is a divider. Remove an entry to hide it.
+// key/shift/alt is the Buzz shortcut (with Cmd, or Ctrl on Windows/Linux).
+const FORMAT_BUTTONS = [
+  { label: "굵게", text: "B", style: "font-weight:800", key: "b" },
+  { label: "기울임꼴", text: "I", style: "font-style:italic;font-family:Georgia,serif", key: "i" },
+  { label: "취소선", text: "S", style: "text-decoration:line-through", key: "x", shift: true },
+  "|",
+  { label: "링크", key: "u", shift: true, icon: "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" },
+  { label: "순서 있는 목록", key: "7", shift: true, icon: "M10 6h11M10 12h11M10 18h11M4 6h1v4M4 10h2M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" },
+  { label: "글머리 기호 목록", key: "8", shift: true, icon: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" },
+  "|",
+  { label: "인용", key: "9", shift: true, icon: "M4 5v14M9 7h11M9 12h11M9 17h7" },
+  { label: "코드", key: "e", icon: "m16 18 6-6-6-6M8 6l-6 6 6 6" },
+  { label: "코드 블록", key: "c", alt: true, icon: "M4 4h16v16H4zM10 9.5 7.5 12l2.5 2.5M14 9.5l2.5 2.5-2.5 2.5" },
+];
+
+// Message box border strength (% of the text color): idle, and while typing.
+const COMPOSER_BORDER = 15;
+const COMPOSER_BORDER_FOCUS = 35;
+
+// Buttons under the message box from the left, by Buzz's own (English)
+// button names, in Slack's order: attach, Aa, emoji, mention. Others follow.
+const COMPOSER_BUTTON_ORDER = ["Attach files", "Toggle formatting", "Emoji and GIFS", "Mention a member"];
 
 // Words after the channel name in an empty message box, like Slack's
 // "#채널에 메시지 보내기". Set to "" to keep Buzz's "Message #channel".
 const PLACEHOLDER_SUFFIX = "에 메시지 보내기";
+// Other empty message boxes, matched by the start of Buzz's English text.
+// The person's name can't be kept here, so DMs read just "메시지 보내기".
+const PLACEHOLDERS = {
+  "Message ": "메시지 보내기",
+  "Reply ": "답글...",
+  "Edit message": "메시지 편집",
+};
 
 // Weight of unread channel names in the sidebar (Buzz: 600).
 const UNREAD_WEIGHT = 700;
@@ -68,6 +112,11 @@ const SIZES = {
   messageLine: 22, // message line height
   channelTitle: 17, // channel name above the conversation
 };
+
+// People in the sidebar's direct-message list: picture size and corner
+// radius in px (Slack: a 20px rounded square; Buzz: a larger circle).
+const DM_AVATAR = 20;
+const DM_AVATAR_RADIUS = 5;
 
 // Message avatars: corner radius in px (Slack ~8; a large number = circle).
 const AVATAR_RADIUS = 8;
@@ -113,6 +162,10 @@ const DOCK_ICON = 20;
 // Show dock labels under the icons, like Slack's left bar.
 const DOCK_LABELS = true;
 
+// Selected row in the @mention suggestions (Slack's blue).
+const MENTION_SELECTED = "#1264A3";
+// Text color of inline code in messages (Slack's pinkish red).
+const INLINE_CODE_COLOR = "#C01343";
 // Color of the "new messages" line in a conversation (Slack's red).
 const NEW_LINE_COLOR = "#E01E5A";
 
@@ -298,6 +351,26 @@ function buildCss(c) {
    macOS draws glyphs thinner than Slack. "auto" uses the system default. */
 ${FONT_SMOOTHING ? `:root, :root * { -webkit-font-smoothing: ${FONT_SMOOTHING} !important; -moz-osx-font-smoothing: auto !important; }` : ""}
 
+${SLACK_FONTS ? `${[
+  /* Slack ships only Regular and Bold, and draws every heavier weight
+     with Bold; Buzz's medium (500) text reads as regular there. */
+  ["100 500", "Regular"],
+  ["600 900", "Bold"],
+].map(([weight, name]) => `@font-face {
+  font-family: "Slack Korean";
+  font-weight: ${weight};
+  src: local("NotoSansKR-${name}"), local("Noto Sans KR ${name}"), local("NotoSansCJKkr-${name}"), local("Noto Sans CJK KR ${name}");
+}`).join("\n")}
+:root {
+  --font-sans: "Slack Korean", "Slack-Lato", "Lato", "Inter Variable", Inter, ui-sans-serif, system-ui, -apple-system, sans-serif !important;
+}` : ""}
+
+${SLACK_LETTER_SPACING ? `:root {
+${["body", "body-lg", "body-sm", "caption", "heading", "label", "label-sm", "message", "title"]
+  .map((name) => `  --text-${name}--letter-spacing: 0em !important;`)
+  .join("\n")}
+}` : ""}
+
 /* Window background behind everything: solid aubergine, no dot texture. */
 .shell-background {
   background-color: ${c.chrome} !important;
@@ -379,11 +452,14 @@ ${DOCK_LABELS ? dockLabelCss(c) : ""}
 /* Message box: Slack's squarer box with a gray border that darkens on focus. */
 [data-composer-surface] {
   border-radius: 8px !important;
+  /* Buzz draws corners as squircles, which thin the border out at a small
+     radius; plain round corners keep it even. */
+  corner-shape: round !important;
   box-shadow: none !important;
-  border-color: color-mix(in srgb, var(--text-standard) 28%, transparent) !important;
+  border-color: color-mix(in srgb, var(--text-standard) ${COMPOSER_BORDER}%, transparent) !important;
 }
 [data-composer-surface]:focus-within {
-  border-color: color-mix(in srgb, var(--text-standard) 60%, transparent) !important;
+  border-color: color-mix(in srgb, var(--text-standard) ${COMPOSER_BORDER_FOCUS}%, transparent) !important;
   outline: none !important;
   box-shadow: none !important;
 }
@@ -406,6 +482,23 @@ ${SIDEBAR}, ${SIDEBAR} * {
 [data-highlight-surface] .buzz-avatar,
 [data-highlight-surface] .buzz-avatar :is(img, [data-avatar-fallback]) {
   border-radius: ${AVATAR_RADIUS}px !important;
+  corner-shape: round !important;
+}
+/* Direct-message rows in the sidebar ([data-dm-identity] wraps the picture). */
+${SIDEBAR} [data-dm-identity] {
+  width: ${DM_AVATAR}px !important;
+  height: ${DM_AVATAR}px !important;
+  min-width: ${DM_AVATAR}px !important;
+  flex: none !important;
+}
+/* Buzz cuts the picture into a circle with a mask; drop it so the corners
+   show, and ring the status dot in the sidebar color instead. */
+${SIDEBAR} [data-dm-identity] .buzz-avatar { -webkit-mask: none !important; mask: none !important; }
+${SIDEBAR} [data-dm-identity] .buzz-avatar-status-dot { box-shadow: 0 0 0 2px ${c.sidebar}; }
+${SIDEBAR} [data-dm-identity],
+${SIDEBAR} [data-dm-identity] .buzz-avatar,
+${SIDEBAR} [data-dm-identity] .buzz-avatar :is(img, [data-avatar-fallback]) {
+  border-radius: ${DM_AVATAR_RADIUS}px !important;
   corner-shape: round !important;
 }
 /* Slack lines the avatar up with the message box's left edge and keeps the
@@ -504,42 +597,80 @@ ${SIDEBAR} details > summary :not(svg, svg *) {
   corner-shape: round !important;
 }
 
-/* Formatting toolbar as a bar across the top of the message box, like
-   Slack. Buzz shows it in the bottom row in place of the @, file and emoji
-   buttons; those come back when the toolbar is closed with its X. */
-[data-composer-surface]:has([data-formatting-open]) {
+/* Message box rows sit closer together, as in Slack. */
+[data-composer-surface] { --composer-gap: 4px; }
+${FORMAT_BAR ? `/* Slack's formatting bar across the top of the message box (added by
+   addFormatBars below). Buzz's own Aa toolbar would replace the bottom row
+   of buttons, so its toggle is hidden. */
+[data-composer-surface]:has(> .slack-format-bar) {
   padding-top: ${FORMAT_BAR_HEIGHT + 4}px !important;
-  /* The bottom row holds only the send button now, so it sits closer. */
-  --composer-gap: 2px;
 }
-/* Slack grays the formatting buttons out until the message box is in use. */
-[data-composer-surface]:not(:focus-within) [data-formatting-open] :is(button, [role="button"]) {
-  opacity: 0.45;
+/* Buzz's Aa button shows and hides this bar instead (see addFormatBars);
+   it is underlined while the bar is showing, as in Slack. */
+:root[data-slack-format-bar="hidden"] .slack-format-bar { display: none; }
+:root[data-slack-format-bar="hidden"] [data-composer-surface]:has(> .slack-format-bar) {
+  padding-top: var(--space-3, 12px) !important;
 }
-${PLACEHOLDER_SUFFIX ? `/* Empty channel message box: Buzz draws "Message", the channel icon and
-   the name; Slack's order is icon, name, then the words. */
-[data-composer-surface] [data-lead="Message"][data-name]::before { content: "" !important; }
-[data-composer-surface] [data-lead="Message"][data-name]::after {
-  content: attr(data-name) ${JSON.stringify(PLACEHOLDER_SUFFIX)} !important;
-}` : ""}
-[data-composer-surface] [data-formatting-open] {
-  position: absolute !important;
+:root:not([data-slack-format-bar="hidden"]) [data-composer-surface] button[aria-label="Toggle formatting"] svg {
+  border-bottom: 1.5px solid currentColor;
+}
+.slack-format-bar {
+  position: absolute;
   top: 0;
   left: 0;
   right: 0;
   height: ${FORMAT_BAR_HEIGHT}px;
-  min-height: 0 !important;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 2px;
   padding-inline: 6px;
   z-index: 1;
   background: color-mix(in srgb, var(--text-standard) 4%, var(--surface-composer, transparent));
-  border-bottom: 1px solid color-mix(in srgb, var(--text-standard) 10%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--text-standard) 8%, transparent);
   border-radius: 7px 7px 0 0;
+  corner-shape: round;
 }
-/* The bar no longer fills the bottom row, so keep the send button right. */
-[data-composer-surface] [data-formatting-open] ~ * { margin-inline-start: auto !important; }
-[data-composer-surface] :is(:has(> [data-formatting-open]), :has(> * > [data-formatting-open])) {
-  justify-content: flex-end !important;
+.slack-format-bar > button {
+  all: unset;
+  box-sizing: border-box !important;
+  flex: none !important;
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: grid !important;
+  place-items: center;
+  border-radius: 4px;
+  color: color-mix(in srgb, var(--text-standard) 70%, transparent);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
 }
+.slack-format-bar > button:hover { background: color-mix(in srgb, var(--text-standard) 8%, transparent); color: var(--text-standard); }
+.slack-format-bar > button svg { display: block; width: 17px; height: 17px; }
+.slack-format-bar > span {
+  flex: none;
+  width: 1px;
+  height: 20px;
+  margin: 0 5px;
+  background: color-mix(in srgb, var(--text-standard) 13%, transparent);
+}
+/* Slack grays the formatting buttons out until the message box is in use. */
+[data-composer-surface]:not(:focus-within) .slack-format-bar > button { opacity: 0.45; }` : ""}
+${PLACEHOLDER_SUFFIX ? `/* Empty channel message box: Buzz draws "Message", the channel icon and
+   the name; Slack's order is icon, name, then the words. */
+${Object.entries(PLACEHOLDERS)
+  .map(
+    ([start, text]) =>
+      `[data-composer-surface] [data-placeholder^=${JSON.stringify(start)}]::before { content: ${JSON.stringify(text)} !important; }`,
+  )
+  .join("\n")}
+[data-composer-surface] [data-lead="Message"][data-name]::before { content: "" !important; }
+[data-composer-surface] [data-lead="Message"][data-name]::after {
+  content: attr(data-name) ${JSON.stringify(PLACEHOLDER_SUFFIX)} !important;
+}` : ""}
 
 /* Date divider: Slack's line across the conversation with the date in a
    bordered pill (Buzz: a small calendar icon and gray caption). The divider
@@ -558,6 +689,7 @@ span:has(> [data-day]) {
   padding: 0 16px;
   border: 1px solid color-mix(in srgb, var(--text-standard) 13%, transparent);
   border-radius: 24px;
+  corner-shape: round;
   font-size: 13px;
   line-height: 27px;
   font-weight: 700;
@@ -574,6 +706,108 @@ span:has(> [data-day]) > :not([data-day]) { display: none !important; }
 }
 [data-new-messages-boundary]::before { background: ${NEW_LINE_COLOR} !important; }
 [data-new-messages-boundary]::after { display: none !important; }
+
+/* Code in messages. Block: Slack's full-width light gray box with a thin
+   border and small corners (Buzz: a narrow box with large corners). */
+[data-highlight-surface] pre,
+[data-composer-surface] [contenteditable] pre {
+  display: block !important;
+  width: auto !important;
+  min-width: 100% !important;
+  align-self: stretch !important;
+  justify-self: stretch !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  margin-block: 4px !important;
+  padding: 0 !important;
+  background: color-mix(in srgb, var(--text-standard) 4%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--text-standard) 13%, transparent) !important;
+  border-radius: 4px !important;
+  corner-shape: round !important;
+  box-shadow: none !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+}
+/* The text holding a code block spans the message, so the box does too. */
+[data-highlight-surface] :has(pre) { width: 100% !important; box-sizing: border-box; }
+[data-highlight-surface] pre code,
+[data-composer-surface] [contenteditable] pre code {
+  padding: 8px !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+}
+/* Inline code: Slack's pinkish red on a light gray chip. */
+[data-highlight-surface] :not(pre) > code,
+[data-composer-surface] [contenteditable] :not(pre) > code {
+  padding: 2px 3px 1px !important;
+  background: color-mix(in srgb, var(--text-standard) 4%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--text-standard) 13%, transparent) !important;
+  border-radius: 3px !important;
+  corner-shape: round !important;
+  color: ${INLINE_CODE_COLOR} !important;
+  font-size: 12px !important;
+}
+
+/* @mention suggestions: Slack's flat list of 32px rows, edge to edge, with
+   the bold name and its detail on one line and a blue selected row (Buzz:
+   padded rounded rows with the detail on a second line). */
+${(() => {
+  const POP = '[data-mention]:has(> [role="listbox"])';
+  return `${POP} {
+  padding: 8px 0 !important;
+  border-radius: 8px !important;
+  corner-shape: round !important;
+}
+${POP} [role="listbox"] { gap: 0 !important; }
+${POP} [role="option"] {
+  min-height: 32px;
+  box-sizing: border-box;
+  padding: 2px 20px 2px 16px !important;
+  gap: 8px !important;
+  border-radius: 0 !important;
+  font-size: 15px;
+}
+${POP} [role="option"] > [aria-hidden="true"]:first-child {
+  flex: none !important;
+  width: 20px !important;
+  height: 20px !important;
+  overflow: hidden;
+  border-radius: 4px;
+}
+/* The picture keeps its own larger size otherwise and spills out. */
+${POP} [role="option"] > [aria-hidden="true"]:first-child :is(.buzz-avatar-status, .buzz-avatar, img, svg) {
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 0 !important;
+  max-width: 20px !important;
+}
+${POP} [role="option"] > [aria-hidden="true"]:first-child [data-avatar-fallback] { font-size: 11px !important; }
+${POP} [role="option"] .buzz-avatar,
+${POP} [role="option"] .buzz-avatar :is(img, [data-avatar-fallback]) {
+  border-radius: 4px !important;
+  corner-shape: round !important;
+}
+${POP} [data-completion-label] {
+  display: flex !important;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+${POP} [data-completion-label] > :first-child { font-weight: 700; flex: none; }
+${POP} [data-completion-label] small {
+  display: block !important;
+  font-size: 15px !important;
+  line-height: inherit !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+${POP} [role="option"][aria-selected="true"] {
+  background: ${MENTION_SELECTED} !important;
+  color: #fff !important;
+}
+${POP} [role="option"][aria-selected="true"] small { color: #fff !important; }`;
+})()}
 
 /* Message author names: Buzz uses medium (500); Slack shows them bold. */
 [data-copy-author] strong,
@@ -733,34 +967,135 @@ function startTranslations(ctx) {
   });
 }
 
-// Slack keeps its formatting toolbar open above the message box. Buzz has
-// the same toolbar behind its "Aa" button but forgets it per chat, so each
-// new message box gets it opened once. Closing it with Aa is respected until
-// that message box goes away.
-function keepFormattingOpen(ctx) {
-  if (!FORMATTING_ALWAYS_OPEN) return;
+// Slack keeps a formatting bar above the message box and its other buttons
+// below. Buzz's own formatting toolbar replaces its bottom row instead, so
+// this adds a separate bar to each message box. A button sends the matching
+// Buzz keyboard shortcut to that box's editor.
+function addFormatBars(ctx) {
+  if (!FORMAT_BAR) return;
   ctx.effect(() => {
-    const opened = new WeakSet();
-    const openIn = (surface) => {
-      if (opened.has(surface)) return;
-      const toggle = surface.querySelector('button[aria-label="Toggle formatting"]');
-      if (!toggle) return;
-      opened.add(surface);
-      if (toggle.getAttribute("aria-pressed") === "true") return;
-      // detail: 1 marks it as a pointer click, so Buzz keeps focus in the
-      // editor instead of moving it to the toolbar.
-      toggle.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
+    const apple = /Mac|iPhone|iPad/.test(navigator.platform);
+    const press = (editor, b) => {
+      editor.focus();
+      const digit = /^\d$/.test(b.key);
+      editor.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: b.key,
+          code: digit ? `Digit${b.key}` : `Key${b.key.toUpperCase()}`,
+          metaKey: apple,
+          ctrlKey: !apple,
+          shiftKey: !!b.shift,
+          altKey: !!b.alt,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
     };
-    const scan = () => document.querySelectorAll("[data-composer-surface]").forEach(openIn);
+    const build = (surface) => {
+      const bar = document.createElement("div");
+      bar.className = "slack-format-bar";
+      bar.setAttribute("role", "toolbar");
+      bar.setAttribute("aria-label", "서식");
+      for (const b of FORMAT_BUTTONS) {
+        if (b === "|") {
+          bar.appendChild(document.createElement("span"));
+          continue;
+        }
+        const button = document.createElement("button");
+        button.type = "button";
+        button.title = b.label;
+        button.setAttribute("aria-label", b.label);
+        if (b.icon) {
+          button.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="${b.icon}"/></svg>`;
+        } else {
+          button.textContent = b.text;
+          button.style.cssText = b.style || "";
+        }
+        // Keep the text selection in the editor.
+        button.addEventListener("mousedown", (event) => event.preventDefault());
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const editor = surface.querySelector('[contenteditable="true"]');
+          if (editor) press(editor, b);
+        });
+        bar.appendChild(button);
+      }
+      return bar;
+    };
+    // Buzz's Aa button would swap the bottom row for Buzz's own formatting
+    // toolbar. It shows or hides this bar instead, remembered across chats.
+    const STORE = "slack-style:format-bar";
+    const root = document.documentElement;
+    if (localStorage.getItem(STORE) === "hidden") root.dataset.slackFormatBar = "hidden";
+    const onClick = (event) => {
+      const toggle = event.target.closest?.('[data-composer-surface] button[aria-label="Toggle formatting"]');
+      if (!toggle) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const hide = root.dataset.slackFormatBar !== "hidden";
+      if (hide) root.dataset.slackFormatBar = "hidden";
+      else delete root.dataset.slackFormatBar;
+      localStorage.setItem(STORE, hide ? "hidden" : "shown");
+      toggle.title = hide ? "서식 표시" : "서식 숨기기";
+    };
+    document.addEventListener("click", onClick, true);
+    // Bottom row in Slack's order. The row is the closest element holding
+    // all of the listed buttons; a box grouping several of them is opened
+    // (display: contents) so its buttons can be ordered with the rest.
+    const orderRow = (surface) => {
+      const found = COMPOSER_BUTTON_ORDER.map((label) => surface.querySelector(`[aria-label="${label}"]`));
+      const present = found.filter(Boolean);
+      if (present.length < 2) return;
+      let row = present[0].parentElement;
+      while (row && row !== surface && !present.every((el) => row.contains(el))) row = row.parentElement;
+      if (!row || row === surface) return;
+      const set = (el, prop, value) => {
+        if (el.style[prop] !== value) el.style[prop] = value;
+      };
+      const place = (box) => {
+        for (const child of box.children) {
+          const held = found.map((el, i) => (el && child.contains(el) ? i : -1)).filter((i) => i >= 0);
+          if (held.length > 1) {
+            set(child, "display", "contents");
+            place(child);
+          } else {
+            set(child, "order", String(held.length ? held[0] + 1 : 9));
+          }
+        }
+      };
+      place(row);
+    };
+    const scan = () => {
+      // A Buzz toolbar left open earlier is closed, so the bottom row returns.
+      for (const close of document.querySelectorAll('[data-composer-surface] [data-formatting-open] button[aria-label="Close formatting"]')) {
+        close.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
+      }
+      for (const toggle of document.querySelectorAll('[data-composer-surface] button[aria-label="Toggle formatting"]')) {
+        const title = root.dataset.slackFormatBar === "hidden" ? "서식 표시" : "서식 숨기기";
+        if (toggle.title !== title) toggle.title = title;
+      }
+      for (const surface of document.querySelectorAll("[data-composer-surface]")) {
+        orderRow(surface);
+        if (surface.querySelector(":scope > .slack-format-bar")) continue;
+        if (!surface.querySelector('[contenteditable="true"]')) continue;
+        surface.appendChild(build(surface));
+      }
+    };
     scan();
     const observer = new MutationObserver(scan);
     observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("click", onClick, true);
+      delete root.dataset.slackFormatBar;
+      document.querySelectorAll(".slack-format-bar").forEach((bar) => bar.remove());
+    };
   });
 }
 
 export function apply(ctx) {
-  keepFormattingOpen(ctx);
+  addFormatBars(ctx);
   registerActivityShortcuts(ctx);
   registerDockApps(ctx);
   startTranslations(ctx);

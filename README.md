@@ -53,7 +53,7 @@ Buzz 데스크톱 앱을 슬랙처럼 보이고 쓰이게 바꾸는 플러그인
 | `DOCK_LABELS`, `DOCK_TILE`, `DOCK_ICON` | 앱 줄 이름 표시, 아이콘 칸·아이콘 크기 |
 | `AUTHOR_WEIGHT`, `UNREAD_WEIGHT`, `CHANNEL_TITLE_WEIGHT` | 이름·안 읽은 채널·채널 제목 굵기 |
 | `AVATAR_RADIUS`, `MESSAGE_INDENT`, `AVATAR_GAP`, `STACK_GAP` | 프로필 사진 모서리, 메시지 위치와 간격 |
-| `FORMATTING_ALWAYS_OPEN`, `FORMAT_BAR_HEIGHT` | 서식 도구 자동 열기, 막대 높이 |
+| `FORMAT_BAR`, `FORMAT_BAR_HEIGHT`, `FORMAT_BUTTONS` | 입력창 위 서식 막대 표시, 높이, 버튼 목록 |
 | `FONT_SMOOTHING` | `""` Buzz 기본(얇게), `"auto"` 조금 두껍게 |
 | `ROW_RADIUS`, `SECTION_INDENT`, `PINNED_ROW_HEIGHT` | 사이드바 줄 모서리, 들여쓰기, 고정 메뉴 줄 높이 |
 
