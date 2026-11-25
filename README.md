@@ -14,10 +14,11 @@ Buzz 데스크톱 앱을 슬랙처럼 보이고 쓰이게 바꾸는 플러그인
 
 1. Buzz에서 **Settings → Plugins → Manage plugins**를 엽니다.
 2. **Add**를 누르고 **Add from Git**을 고릅니다.
-3. 이 저장소의 **SSH 주소**를 붙여넣고 추가합니다. Branch와 Folder는 비워 두면 됩니다.
-   - 비공개 저장소라서 HTTPS 주소(`https://github.com/...`)로는 받을 수 없습니다. Buzz는 HTTPS에서 로그인 창을 띄우지 않기 때문입니다.
-   - GitHub 저장소의 **Code → SSH**에 나오는 `git@github.com:조직/저장소.git` 형태 주소를 쓰세요.
-   - 내 컴퓨터의 SSH 키가 GitHub 계정에 등록되어 있어야 합니다. 터미널에서 `ssh -T git@github.com`을 실행해 인사말이 나오면 준비된 것입니다.
+3. 아래 주소를 붙여넣고 추가합니다. Branch와 Folder는 비워 두면 됩니다.
+
+   ```
+   https://github.com/pango-gy/buzz-slack-style
+   ```
 4. 목록에서 **Slack Style**이 켜져 있는지 확인합니다.
 
 새 버전이 올라오면 같은 화면에서 Slack Style의 **Update** 버튼을 누르면 됩니다.
