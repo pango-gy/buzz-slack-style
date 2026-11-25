@@ -1695,11 +1695,11 @@ ${SLACK_MENUS ? `
 .slack-link-card-icon { width: 16px; height: 16px; border-radius: 3px; object-fit: contain; flex: none; }
 .slack-link-card-image { width: 120px; flex: none; object-fit: cover; border-left: 1px solid color-mix(in srgb, var(--text-standard) 8%, transparent); }
 /* The 다이렉트 메시지 title's right-click menu, built by this plugin. */
+/* It uses Buzz's own menu classes (buzz-menu-popup text-body-sm, as Buzz's
+   menus do), so only the placement is set here. */
 .slack-dm-menu {
-  position: fixed; z-index: 1000;
-  max-height: calc(100vh - 16px); overflow-y: auto;
-  background: var(--surface-popover, #fff);
-  color: var(--text-standard);
+  position: fixed; z-index: var(--layer-popover, 1000);
+  max-height: calc(100vh - 16px);
   display: flex; flex-direction: column;
 }
 .slack-dm-menu .buzz-menu-item { display: flex; align-items: center; cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -3173,7 +3173,7 @@ function dmSectionMenu(ctx) {
         : `<div class="buzz-menu-item slack-dm-menu-empty" data-disabled="" aria-disabled="true">${empty}</div>`);
 
     const menu = document.createElement("div");
-    menu.className = "buzz-menu-popup slack-dm-menu";
+    menu.className = "buzz-menu-popup text-body-sm slack-dm-menu";
     menu.setAttribute("role", "menu");
     menu.setAttribute("aria-label", t("다이렉트 메시지", "Direct messages"));
     menu.innerHTML =
