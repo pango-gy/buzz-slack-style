@@ -56,6 +56,12 @@ Buzz 데스크톱 앱을 슬랙처럼 보이고 쓰이게 바꾸는 플러그인
 | `FORMAT_BAR`, `FORMAT_BAR_HEIGHT`, `FORMAT_BUTTONS` | 입력창 위 서식 막대 표시, 높이, 버튼 목록 |
 | `FONT_SMOOTHING` | `""` Buzz 기본(얇게), `"auto"` 조금 두껍게 |
 | `ROW_RADIUS`, `SECTION_INDENT`, `PINNED_ROW_HEIGHT` | 사이드바 줄 모서리, 들여쓰기, 고정 메뉴 줄 높이 |
+| `CHANNEL_TABS`, `FILES_PAGE` | 채널 이름 아래 탭 줄(메시지·파일·캔버스) 표시, 파일 탭이 한 번에 읽는 메시지 수 |
+| `SLACK_CORNERS`, `CARD_RADIUS` | 메뉴·대화상자·버튼 등 모서리 크기, 사이드바·대화 영역 모서리 |
+| `SLACK_FONTS`, `SLACK_LETTER_SPACING` | Noto Sans KR 사용(설치된 컴퓨터만), 자간 0 |
+| `COMPOSER_ICON`, `COMPOSER_BUTTON_GAP`, `COMPOSER_BUTTON_ORDER` | 입력창 버튼 아이콘 크기, 간격, 아래 줄 순서 |
+| `DOCK_NEW_BUTTON`, `DOCK_NEW_BUTTON_BOTTOM` | + 버튼을 왼쪽 앱 줄에 표시, 창 아래에서의 거리 |
+| `SEARCH_HEIGHT` | 상단 검색창 높이 |
 
 ## 개발
 

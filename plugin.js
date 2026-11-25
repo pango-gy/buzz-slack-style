@@ -5,7 +5,7 @@
 // Overrides Buzz's internal classes and color variables, which can change
 // between Buzz versions. If they do, only the affected colors revert.
 
-export const inject = ["react", "pages", "navigation"];
+export const inject = ["react", "pages", "navigation", "panels", "relay", "notifications"];
 
 // Slack-style shortcuts pinned at the top of the Messages sidebar, next to
 // Activity. Each row opens Buzz's own Activity page with that tab already
@@ -100,6 +100,27 @@ const PLACEHOLDERS = {
 // Corner radius (px) of the sidebar and conversation card, and of other
 // panels in the workspace (Slack: about 10; Buzz: a much rounder panel).
 const CARD_RADIUS = 10;
+
+// Corner sizes (px) used across Buzz, by Buzz's own names. Slack uses about
+// 12 on dialogs, 8 on menus, cards and buttons, 6 on rows and 4 on chips.
+// Set SLACK_CORNERS to null to keep Buzz's rounder corners.
+const SLACK_CORNERS = {
+  "radius-panel": 12, // dialogs and large panels
+  "radius-container": 10, // menus and containers
+  "radius-card": 12,
+  "radius-control": 8, // buttons and inputs
+  "radius-row": 6, // list and menu rows
+  "radius-icon-button": 6,
+  "radius-chip": 4,
+};
+
+// Slack's row of tabs under the channel name: 메시지, 파일, 캔버스. 파일 lists
+// the files posted in the channel (built by this plugin) and 캔버스 opens
+// Buzz's own channel canvas; both open in the pane on the right. Set to
+// false to hide the row.
+const CHANNEL_TABS = true;
+// How many recent messages 파일 reads at a time when looking for files.
+const FILES_PAGE = 200;
 
 // Height (px) of the search box in the top bar (Slack: 28; Buzz: 36).
 const SEARCH_HEIGHT = 28;
@@ -389,6 +410,14 @@ ${["body", "body-lg", "body-sm", "caption", "heading", "label", "label-sm", "mes
   .join("\n")}
 }` : ""}
 
+${SLACK_CORNERS ? `/* Corners everywhere: Slack's small plain-round corners on menus, dialogs,
+   cards, buttons and rows, in place of Buzz's large squircles. Pills and
+   circles (avatars, round buttons) keep their shape. */
+:root {
+${Object.entries(SLACK_CORNERS).map(([name, px]) => `  --${name}: ${px}px !important;`).join("\n")}
+}
+*, *::before, *::after { corner-shape: round !important; }` : ""}
+
 /* Window background behind everything: solid aubergine, no dot texture. */
 .shell-background {
   background-color: ${c.chrome} !important;
@@ -513,6 +542,8 @@ ${DOCK_NEW_BUTTON ? `/* The round + button floats over the bottom of the sidebar
    button can't leave the sidebar, so it is made invisible and a copy in the
    left bar (added by addDockNewButton) presses it. */
 ${SIDEBAR} [aria-label="New options"] { opacity: 0 !important; pointer-events: none !important; }
+/* The round backing drawn behind it goes too. */
+${SIDEBAR} :has(> [aria-label="New options"]):not(:has(> :nth-child(2))) { opacity: 0 !important; pointer-events: none !important; }
 .slack-new-button {
   all: unset;
   position: fixed;
@@ -938,6 +969,81 @@ ${POP} [role="option"][aria-selected="true"] {
 ${POP} [role="option"][aria-selected="true"] small { color: #fff !important; }`;
 })()}
 
+${CHANNEL_TABS ? `/* Tab row under the channel name (added by addChannelTabs), placed right
+   after the header; the dividing line moves below the row. */
+.panel-header:has(+ .slack-channel-tabs) { border-block-end-color: transparent !important; }
+.slack-channel-tabs {
+  flex: none;
+  width: 100%;
+  border-bottom: 1px solid var(--border-standard);
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  height: 34px;
+  padding-inline: 12px;
+  box-sizing: border-box;
+}
+.slack-channel-tabs > button {
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border-bottom: 2px solid transparent;
+  color: color-mix(in srgb, var(--text-standard) 72%, transparent);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.slack-channel-tabs > button:hover { color: var(--text-standard); }
+.slack-channel-tabs > button[data-active] {
+  color: var(--text-standard);
+  border-bottom-color: var(--text-standard);
+}
+.slack-channel-tabs > button svg { width: 15px; height: 15px; flex: none; }
+
+/* 파일 panel. */
+.slack-files { padding: 8px 0; font-size: 14px; overflow-y: auto; height: 100%; box-sizing: border-box; }
+.slack-files-note { padding: 12px 16px; color: color-mix(in srgb, var(--text-standard) 60%, transparent); }
+.slack-files-row {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+.slack-files-row:hover { background: color-mix(in srgb, var(--text-standard) 5%, transparent); }
+.slack-files-thumb {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  object-fit: cover;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--text-standard) 8%, transparent);
+  color: color-mix(in srgb, var(--text-standard) 60%, transparent);
+  font-size: 10px;
+  font-weight: 700;
+}
+.slack-files-text { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.slack-files-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slack-files-meta { font-size: 12px; color: color-mix(in srgb, var(--text-standard) 60%, transparent); }
+.slack-files-more {
+  all: unset;
+  margin: 8px 16px;
+  padding: 4px 12px;
+  border: 1px solid color-mix(in srgb, var(--text-standard) 25%, transparent);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}` : ""}
+
 /* Message author names: Buzz uses medium (500); Slack shows them bold. */
 [data-copy-author] strong,
 [data-copy-author] strong * {
@@ -1248,13 +1354,455 @@ function addDockNewButton(ctx) {
       target.dispatchEvent(new MouseEvent("click", options));
     });
     document.body.appendChild(button);
-    return () => button.remove();
+    // Buzz's button sits in a round backing of its own. Hide the largest box
+    // around it that is still button-sized, so no empty circle is left.
+    const hidden = new Set();
+    const hideBacking = () => {
+      const target = document.querySelector(`${SIDEBAR} [aria-label="New options"]`);
+      if (!target) return;
+      let box = target;
+      while (box.parentElement) {
+        const rect = box.parentElement.getBoundingClientRect();
+        if (rect.width > 72 || rect.height > 72) break;
+        box = box.parentElement;
+      }
+      if (box.style.visibility !== "hidden") {
+        box.style.visibility = "hidden";
+        hidden.add(box);
+      }
+    };
+    hideBacking();
+    const observer = new MutationObserver(hideBacking);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      hidden.forEach((box) => (box.style.visibility = ""));
+      button.remove();
+    };
+  });
+}
+
+// ---- Channel tabs: 메시지 / 파일 / 캔버스 --------------------------------
+
+const TAB_ICONS = {
+  messages: "M7.9 20A9 9 0 1 0 4 16.1L2 22z",
+  files: "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5",
+  canvas: "M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM8 9h8M8 13h8M8 17h5",
+};
+const FILES_TARGET = "slack-style:files";
+
+// What the 파일 launcher last received from Buzz for the channel on screen:
+// its toggle and whether the 파일 tab is showing.
+const filesLauncher = { props: null, listeners: new Set() };
+
+// Files attached to a message, read from its imeta tags
+// (["imeta", "url …", "m image/png", "size 123", "filename a.png", …]).
+function messageFiles(event) {
+  const files = [];
+  for (const tag of event.tags || []) {
+    if (tag[0] !== "imeta") continue;
+    const file = { messageId: event.id, author: event.pubkey, at: event.created_at };
+    for (const part of tag.slice(1)) {
+      const space = String(part).indexOf(" ");
+      if (space < 0) continue;
+      const key = part.slice(0, space);
+      const value = part.slice(space + 1);
+      if (key === "url") file.url = value;
+      else if (key === "m") file.type = value;
+      else if (key === "size") file.size = Number(value);
+      else if (key === "filename") file.name = value;
+      else if (key === "x") file.sha256 = value;
+      else if (key === "dim") file.dim = value;
+    }
+    if (!file.url) continue;
+    if (!file.name) file.name = decodeURIComponent(file.url.split("/").pop() || "파일");
+    files.push(file);
+  }
+  return files;
+}
+
+function fileSize(bytes) {
+  if (!Number.isFinite(bytes)) return "";
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+}
+
+function registerFilesPanel(ctx) {
+  const React = ctx.react;
+  const h = React.createElement;
+
+  // Buzz mounts this in the channel header and hands it the channel and a
+  // toggle for the 파일 tab. It draws nothing; the tab row uses what it got.
+  function FilesLauncher(props) {
+    React.useEffect(() => {
+      filesLauncher.props = props;
+      filesLauncher.listeners.forEach((listener) => listener());
+    });
+    React.useEffect(
+      () => () => {
+        if (filesLauncher.props && filesLauncher.props.context === props.context) {
+          filesLauncher.props = null;
+          filesLauncher.listeners.forEach((listener) => listener());
+        }
+      },
+      [],
+    );
+    return null;
+  }
+
+  function FilesPanel({ channelContext, context }) {
+    if (typeof ctx.panels.useTabTitle === "function") ctx.panels.useTabTitle("파일");
+    const relay = React.useSyncExternalStore(ctx.relay.subscribe, ctx.relay.snapshot);
+    const ready = relay && relay.status === "ready" && channelContext && relay.scope === channelContext.scope;
+    const session = ready ? relay.session : null;
+    const channelId = channelContext && channelContext.channelId;
+    const [state, setState] = React.useState({ files: [], loading: true, error: "", oldest: null, done: false });
+
+    const load = React.useCallback(
+      (before, previous, signal) => {
+        if (!session || !channelId) return;
+        setState((current) => ({ ...current, loading: true, error: "" }));
+        const filter = { kinds: [9], "#h": [channelId], limit: FILES_PAGE };
+        if (before) filter.until = before;
+        Promise.resolve()
+          .then(() => session.read([filter], signal ? { signal } : undefined))
+          .then((events) => {
+            if (signal && signal.aborted) return;
+            const list = Array.isArray(events) ? events : [];
+            const seen = new Set(previous.map((file) => `${file.messageId}:${file.url}`));
+            const found = [];
+            let oldest = before || null;
+            for (const event of list) {
+              if (oldest === null || event.created_at < oldest) oldest = event.created_at;
+              for (const file of messageFiles(event)) {
+                const key = `${file.messageId}:${file.url}`;
+                if (!seen.has(key)) {
+                  seen.add(key);
+                  found.push(file);
+                }
+              }
+            }
+            const files = [...previous, ...found].sort((a, b) => b.at - a.at);
+            setState({ files, loading: false, error: "", oldest: oldest === null ? null : oldest - 1, done: list.length < FILES_PAGE });
+          })
+          .catch((error) => {
+            if (signal && signal.aborted) return;
+            setState((current) => ({ ...current, loading: false, error: String((error && error.message) || error) }));
+          });
+      },
+      [session, channelId],
+    );
+
+    React.useEffect(() => {
+      const controller = new AbortController();
+      setState({ files: [], loading: true, error: "", oldest: null, done: false });
+      load(null, [], controller.signal);
+      return () => controller.abort();
+    }, [load]);
+
+    if (!session) return h("div", { className: "slack-files" }, h("p", { className: "slack-files-note" }, "연결되는 중입니다…"));
+
+    const profiles = session.profiles && typeof session.profiles.snapshot === "function" ? session.profiles.snapshot() : null;
+    const authorName = (pubkey) => {
+      const profile = profiles && typeof profiles.get === "function" ? profiles.get(pubkey) : null;
+      return (profile && (profile.displayName || profile.name)) || "";
+    };
+    const open = (file) => {
+      const media = /^(image|video)\//.test(file.type || "");
+      const attachment = { url: file.url, type: file.type, name: file.name, size: file.size, sha256: file.sha256, dim: file.dim };
+      try {
+        if (media && context && typeof context.openMedia === "function" && context.openMedia(file.messageId, attachment)) return;
+        if (context && typeof context.open === "function" && context.open(file.url)) return;
+      } catch (error) {
+        // Fall through to the note below.
+      }
+      setState((current) => ({ ...current, error: "이 파일은 여기서 열 수 없습니다. 대화에서 열어 주세요." }));
+    };
+    const thumb = (file) => {
+      if (/^image\//.test(file.type || "") && typeof session.media === "function") {
+        let src = "";
+        try {
+          src = session.media(file.url, 72);
+        } catch (error) {
+          src = "";
+        }
+        if (typeof src === "string" && src) return h("img", { className: "slack-files-thumb", src, alt: "", loading: "lazy" });
+      }
+      const ext = (file.name.split(".").pop() || "").slice(0, 4).toUpperCase();
+      return h("span", { className: "slack-files-thumb" }, ext || "FILE");
+    };
+
+    return h(
+      "div",
+      { className: "slack-files" },
+      state.files.map((file) =>
+        h(
+          "button",
+          { type: "button", className: "slack-files-row", key: `${file.messageId}:${file.url}`, onClick: () => open(file) },
+          thumb(file),
+          h(
+            "span",
+            { className: "slack-files-text" },
+            h("span", { className: "slack-files-name" }, file.name),
+            h(
+              "span",
+              { className: "slack-files-meta" },
+              [authorName(file.author), new Date(file.at * 1000).toLocaleDateString("ko-KR"), fileSize(file.size)].filter(Boolean).join(" · "),
+            ),
+          ),
+        ),
+      ),
+      state.error ? h("p", { className: "slack-files-note" }, state.error) : null,
+      state.loading ? h("p", { className: "slack-files-note" }, "불러오는 중…") : null,
+      !state.loading && !state.files.length && !state.error ? h("p", { className: "slack-files-note" }, "최근 메시지에 파일이 없습니다.") : null,
+      !state.loading && !state.done
+        ? h("button", { type: "button", className: "slack-files-more", onClick: () => load(state.oldest, state.files) }, "이전 메시지에서 더 찾기")
+        : null,
+    );
+  }
+
+  ctx.panels.register({
+    id: "files",
+    title: "파일",
+    matches: () => false,
+    channelLauncher: FilesLauncher,
+    channelPlacement: "tab",
+    component: FilesPanel,
+  });
+}
+
+// The row itself is plain DOM added after the channel header, like the
+// formatting bar: Buzz has no slot for a row under the channel name.
+function addChannelTabs(ctx) {
+  if (!CHANNEL_TABS) return;
+  registerFilesPanel(ctx);
+  ctx.effect(() => {
+    const HEADER =
+      '.panel-header:has([aria-label^="Manage members of "], [aria-label^="Channel access for "], [aria-label^="Share access to "], [aria-label^="Chat access for "])';
+    const icon = (d) =>
+      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+    const click = (el) => {
+      const options = { bubbles: true, cancelable: true, button: 0, detail: 1 };
+      el.dispatchEvent(new PointerEvent("pointerdown", { ...options, pointerType: "mouse" }));
+      el.dispatchEvent(new MouseEvent("mousedown", options));
+      el.dispatchEvent(new PointerEvent("pointerup", { ...options, pointerType: "mouse" }));
+      el.dispatchEvent(new MouseEvent("mouseup", options));
+      el.dispatchEvent(new MouseEvent("click", options));
+    };
+    // 캔버스 has no direct way in: open Buzz's "Channel actions" menu and
+    // choose "View canvas" there.
+    const openCanvas = (header) => {
+      const menu = header.querySelector('[aria-label="Channel actions"]');
+      if (!menu) return;
+      click(menu);
+      let tries = 0;
+      const find = () => {
+        const item = [...document.querySelectorAll('[role="menuitem"]')].find((el) => /view canvas/i.test(el.textContent || ""));
+        if (item) return click(item);
+        if (++tries < 30) return void setTimeout(find, 30);
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      };
+      setTimeout(find, 30);
+    };
+    const build = (header) => {
+      const row = document.createElement("div");
+      row.className = "slack-channel-tabs";
+      row.setAttribute("role", "toolbar");
+      row.setAttribute("aria-label", "채널 탭");
+      const add = (id, label, run) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.tab = id;
+        button.innerHTML = `${icon(TAB_ICONS[id])}<span>${label}</span>`;
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          run();
+        });
+        row.appendChild(button);
+      };
+      const files = () => filesLauncher.props;
+      add("messages", "메시지", () => {
+        const props = files();
+        if (props && props.pressed && props.available()) props.toggle(FILES_TARGET);
+      });
+      add("files", "파일", () => {
+        const props = files();
+        if (props && props.available()) props.toggle(FILES_TARGET);
+      });
+      add("canvas", "캔버스", () => openCanvas(header));
+      return row;
+    };
+    const paint = () => {
+      const pressed = !!(filesLauncher.props && filesLauncher.props.pressed);
+      for (const row of document.querySelectorAll(".slack-channel-tabs")) {
+        for (const button of row.children) {
+          const active = button.dataset.tab === "files" ? pressed : button.dataset.tab === "messages" ? !pressed : false;
+          if (active) button.dataset.active = "";
+          else delete button.dataset.active;
+        }
+      }
+    };
+    const scan = () => {
+      for (const header of document.querySelectorAll(HEADER)) {
+        const next = header.nextElementSibling;
+        if (!next || !next.classList.contains("slack-channel-tabs")) header.insertAdjacentElement("afterend", build(header));
+      }
+      paint();
+    };
+    scan();
+    filesLauncher.listeners.add(paint);
+    const observer = new MutationObserver(scan);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      filesLauncher.listeners.delete(paint);
+      document.querySelectorAll(".slack-channel-tabs").forEach((row) => row.remove());
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Channel message alerts, like Slack's "All new messages".
+// Buzz alerts only for mentions, DMs and thread replies. This adds a
+// "채널 메시지" alert for every new message in a channel. It appears in
+// Settings → Notifications, where it can be turned off or given a sound.
+//
+// It listens to the same live message feed Buzz's own alerts use
+// (session.subscribeIncoming). That feed is not a documented plugin API, so
+// every step checks it exists; if a Buzz update changes it, channel alerts
+// simply stop and nothing else is affected.
+const CHANNEL_ALERTS = {
+  enabled: true,
+  // "all", or a list of channel names without #, e.g. ["notice_결제", "help_cto"].
+  channels: "all",
+  // Stay quiet for the channel you are looking at right now.
+  skipWhileViewing: true,
+};
+
+function previewText(text) {
+  return String(text || "")
+    .replace(/nostr:[a-z0-9]+/gi, "")
+    .replace(/[*_~`>#]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 200);
+}
+
+function startChannelAlerts(ctx) {
+  if (!CHANNEL_ALERTS.enabled) return;
+  const relay = ctx.relay;
+  const service = ctx.notifications;
+  if (!relay?.snapshot || !relay?.subscribe || !service?.register) return;
+  const category = service.register({ id: "channel-messages", label: "채널 메시지" });
+  const submit = category?.submit;
+  if (typeof submit !== "function") return;
+  const wanted = CHANNEL_ALERTS.channels === "all" ? undefined : new Set(CHANNEL_ALERTS.channels);
+
+  ctx.effect(() => {
+    let session;
+    let stopIncoming = () => {};
+    let closed = false;
+    const timers = new Set();
+
+    // Decide one message. Returns "wait" while Buzz is still working out
+    // whether it is a mention/DM/reply (those get Buzz's own alert).
+    const decide = (owned, viewer, message) => {
+      const channel = owned.channels?.list?.().channels?.find((c) => c.id === message.channelId);
+      if (!channel || channel.huddle || channel.channelType === "dm" || channel.channelType === "solo") return false;
+      if (wanted && !wanted.has(channel.name)) return false;
+      const prefs = owned.sidebarPreferences?.snapshot?.();
+      if (prefs?.data?.muted?.includes?.(message.channelId)) return false;
+      const attention = owned.unread?.attention?.(message.channelId, message.messageId);
+      if (attention) {
+        if (attention.pending || attention.status === "unknown") return "wait";
+        // Mentions, DMs and thread replies already get Buzz's own alert.
+        if (attention.category || attention.mentioned) return false;
+        // Replies inside threads are not channel messages in Slack either.
+        if (attention.rootId && attention.rootId !== message.messageId) return false;
+        if (CHANNEL_ALERTS.skipWhileViewing && attention.viewing) return false;
+      }
+      return channel;
+    };
+
+    const send = (owned, viewer, message, channel) => {
+      const scope = typeof owned.scope === "string" ? owned.scope : "";
+      const at = scope.lastIndexOf(":");
+      if (at < 0) return;
+      const members = channel.members ?? [];
+      let name = "";
+      try {
+        name = owned.names?.resolve?.(message.workflowOwnerId ?? message.authorId, undefined, members) ?? "";
+      } catch {}
+      if (!name) name = owned.profiles?.snapshot?.().get?.(message.authorId)?.name ?? message.authorId.slice(0, 10);
+      void Promise.resolve(
+        submit({
+          sourceKey: message.messageId,
+          title: `#${channel.name} · ${name}`,
+          body: previewText(message.previewContent),
+          target: {
+            version: 1,
+            kind: "conversation",
+            scope: { viewer, communityOrigin: scope.slice(0, at) },
+            channelId: message.channelId,
+            messageId: message.messageId,
+          },
+        }),
+      ).catch(() => {});
+    };
+
+    const consider = (owned, viewer, message, tries) => {
+      if (closed || session !== owned) return;
+      const age = Date.now() - message.createdAt * 1000;
+      if (age < -30000 || age > 120000) return;
+      const verdict = decide(owned, viewer, message);
+      if (verdict === "wait") {
+        if (tries >= 5) return;
+        const timer = setTimeout(() => {
+          timers.delete(timer);
+          consider(owned, viewer, message, tries + 1);
+        }, 800);
+        timers.add(timer);
+        return;
+      }
+      if (verdict) send(owned, viewer, message, verdict);
+    };
+
+    const update = () => {
+      const snap = relay.snapshot();
+      const next = snap?.status === "ready" ? snap.session : undefined;
+      if (next === session) return;
+      stopIncoming();
+      stopIncoming = () => {};
+      session = next;
+      const viewer = snap?.viewer;
+      if (!session || !viewer || typeof session.subscribeIncoming !== "function") return;
+      const owned = session;
+      stopIncoming = owned.subscribeIncoming((messages) => {
+        for (const message of messages) {
+          if (!message || message.authorId === viewer || message.audience) continue;
+          consider(owned, viewer, message, 0);
+        }
+      });
+    };
+
+    update();
+    const stopRelay = relay.subscribe(update);
+    return () => {
+      closed = true;
+      stopIncoming();
+      if (typeof stopRelay === "function") stopRelay();
+      timers.forEach(clearTimeout);
+    };
   });
 }
 
 export function apply(ctx) {
+  startChannelAlerts(ctx);
   addFormatBars(ctx);
   addDockNewButton(ctx);
+  addChannelTabs(ctx);
   registerActivityShortcuts(ctx);
   registerDockApps(ctx);
   startTranslations(ctx);
