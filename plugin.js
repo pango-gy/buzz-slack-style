@@ -188,6 +188,17 @@ const DOCK_ORDER = ["bestie", "buzz.channels", "slack-sidebar/dock-dm", "slack-s
 // (Rows are matched by their title, so this follows ACTIVITY_ROWS labels.)
 const PINNED_ORDER = ACTIVITY_ROWS.map((row) => row.label);
 
+// Hide Buzz's own 내 활동 (Activity) row at the top of the sidebar; the left
+// bar already has it.
+const HIDE_ACTIVITY_ROW = true;
+
+// Slack's 허들 row in the pinned rows, placed after 스레드. It opens a page
+// (built by this plugin) listing recent huddles in your channels; choosing
+// one opens its channel. Set HUDDLES to false to hide it.
+const HUDDLES = true;
+const HUDDLES_LABEL = "허들";
+if (HUDDLES) PINNED_ORDER.splice(1, 0, HUDDLES_LABEL);
+
 // Dock icon tile and glyph size in px (Slack's tile is about 36).
 const DOCK_TILE = 36;
 const DOCK_ICON = 20;
@@ -623,6 +634,8 @@ nav.shell-pages > * {
 nav.shell-pages > * { order: 50; }
 /* Activity is the only pinned row without a title attribute. */
 nav.shell-pages > :is(${ACTIVITY_ROW}) { order: 0; }
+${HIDE_ACTIVITY_ROW ? `/* 내 활동 is already an app in the left bar, so its sidebar row is hidden. */
+nav.shell-pages > :is(${ACTIVITY_ROW}) { display: none !important; }` : ""}
 
 /* Buzz selects Activity for every Activity tab; while a pinned row's tab
    is showing, that row looks selected instead and Activity does not. */
@@ -635,6 +648,9 @@ ${mine} .shell-page-icon img { filter: brightness(0.3); }
 ${activity} { background: transparent !important; color: ${c.text} !important; --text-row-selected: ${c.text}; --text-navigation-selected: ${c.text}; --surface-navigation-selected: transparent; --affordance-navigation-selected: transparent; --interaction-selected: transparent; }
 ${activity}:hover { background: ${c.hover} !important; }`;
 }).join("\n")}
+/* A selected pinned row is light lilac, so its light icon is darkened to
+   stay visible (page icons are fixed images, not text-colored). */
+nav.shell-pages > [data-selected] .shell-page-icon img { filter: brightness(0.3); }
 ${PINNED_ORDER.map(
   (title, i) => `nav.shell-pages > [title=${JSON.stringify(title)}] { order: ${i + 1}; }`,
 ).join("\n")}
@@ -1002,6 +1018,15 @@ ${CHANNEL_TABS ? `/* Tab row under the channel name (added by addChannelTabs), p
   border-bottom-color: var(--text-standard);
 }
 .slack-channel-tabs > button svg { width: 15px; height: 15px; flex: none; }
+/* The selected tab's icon is filled, as in Slack; lines inside it are drawn
+   in the background color so they stay visible. */
+.slack-channel-tabs > button[data-active] svg path:first-child { fill: currentColor; }
+.slack-channel-tabs > button[data-active] svg path + path { stroke: var(--surface-panel, #fff); }
+
+/* 허들 page. */
+.slack-huddles { max-width: 720px; margin: 0 auto; padding: 24px 16px; font-size: 15px; }
+.slack-huddles h1 { font-size: 22px; font-weight: 800; margin: 0 0 16px; }
+.slack-huddles-live { color: #007A5A; font-weight: 700; }
 
 /* 파일 panel. */
 .slack-files { padding: 8px 0; font-size: 14px; overflow-y: auto; height: 100%; box-sizing: border-box; }
@@ -1385,9 +1410,10 @@ function addDockNewButton(ctx) {
 // ---- Channel tabs: 메시지 / 파일 / 캔버스 --------------------------------
 
 const TAB_ICONS = {
-  messages: "M7.9 20A9 9 0 1 0 4 16.1L2 22z",
-  files: "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5",
-  canvas: "M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM8 9h8M8 13h8M8 17h5",
+  // [outline, lines drawn inside it]
+  messages: ["M7.9 20A9 9 0 1 0 4 16.1L2 22z", ""],
+  files: ["M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z", "M14 3v5h5"],
+  canvas: ["M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z", "M8 9h8M8 13h8M8 17h5"],
 };
 const FILES_TARGET = "slack-style:files";
 
@@ -1572,6 +1598,152 @@ function registerFilesPanel(ctx) {
   });
 }
 
+// ---- 허들: recent huddles across your channels ----------------------------
+
+const HUDDLE_ICON = "M3 14v-2a9 9 0 0 1 18 0v2M3 14h3a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2zM21 14h-3a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h1a2 2 0 0 0 2-2z";
+
+// A huddle start (kind 48100) and end (48103) name their room in the JSON
+// content and their channel in an "h" tag.
+function huddleRoom(event) {
+  try {
+    const id = JSON.parse(event.content).ephemeral_channel_id;
+    return typeof id === "string" ? id : "";
+  } catch (error) {
+    return "";
+  }
+}
+
+function registerHuddlesPage(ctx) {
+  if (!HUDDLES) return;
+  const React = ctx.react;
+  const h = React.createElement;
+
+  function HuddlesPage() {
+    const relay = React.useSyncExternalStore(ctx.relay.subscribe, ctx.relay.snapshot);
+    const session = relay && relay.status === "ready" ? relay.session : null;
+    const scope = relay && relay.scope;
+    const [state, setState] = React.useState({ rows: [], loading: true, error: "" });
+
+    React.useEffect(() => {
+      if (!session) return undefined;
+      const controller = new AbortController();
+      const signal = controller.signal;
+      setState({ rows: [], loading: true, error: "" });
+      (async () => {
+        const listed = session.channels && typeof session.channels.list === "function" ? session.channels.list() : null;
+        const channels = (listed && listed.channels) || [];
+        const names = new Map(channels.map((channel) => [channel.id, channel.name]));
+        const ids = [...names.keys()];
+        const events = [];
+        // Ask for a batch of channels at a time.
+        for (let i = 0; i < ids.length; i += 40) {
+          const batch = ids.slice(i, i + 40);
+          const found = await session.read(
+            [
+              { kinds: [48100], "#h": batch, limit: 100 },
+              { kinds: [48103], "#h": batch, limit: 200 },
+            ],
+            { signal },
+          );
+          if (Array.isArray(found)) events.push(...found);
+        }
+        if (signal.aborted) return;
+        const ended = new Map();
+        for (const event of events) {
+          if (event.kind !== 48103) continue;
+          const room = huddleRoom(event);
+          if (room && (!ended.has(room) || event.created_at < ended.get(room))) ended.set(room, event.created_at);
+        }
+        const rooms = new Map();
+        for (const event of events) {
+          if (event.kind !== 48100) continue;
+          const room = huddleRoom(event);
+          const tag = (event.tags || []).find((t) => t[0] === "h");
+          if (!room || !tag) continue;
+          const previous = rooms.get(room);
+          if (!previous || event.created_at < previous.at)
+            rooms.set(room, { room, channelId: tag[1], author: event.pubkey, at: event.created_at });
+        }
+        const now = Date.now() / 1000;
+        const rows = [...rooms.values()]
+          .map((row) => {
+            const end = ended.get(row.room);
+            return { ...row, name: names.get(row.channelId) || "", end, live: !end && row.at + 3600 > now };
+          })
+          .sort((a, b) => b.at - a.at)
+          .slice(0, 100);
+        try {
+          if (session.profiles && typeof session.profiles.ensure === "function")
+            await session.profiles.ensure([...new Set(rows.map((row) => row.author))]);
+        } catch (error) {
+          // Names are optional.
+        }
+        if (!signal.aborted) setState({ rows, loading: false, error: "" });
+      })().catch((error) => {
+        if (!signal.aborted) setState({ rows: [], loading: false, error: String((error && error.message) || error) });
+      });
+      return () => controller.abort();
+    }, [session, scope]);
+
+    if (!session) return h("div", { className: "slack-huddles" }, h("p", { className: "slack-files-note" }, "연결되는 중입니다…"));
+    const profiles = session.profiles && typeof session.profiles.snapshot === "function" ? session.profiles.snapshot() : null;
+    const authorName = (pubkey) => {
+      const profile = profiles && typeof profiles.get === "function" ? profiles.get(pubkey) : null;
+      return (profile && (profile.displayName || profile.name)) || "";
+    };
+    const openChannel = (channelId) => {
+      const at = String(scope || "").lastIndexOf(":");
+      if (at < 0) return;
+      void ctx.navigation.open({
+        version: 1,
+        kind: "conversation",
+        scope: { communityOrigin: scope.slice(0, at), viewer: scope.slice(at + 1) },
+        channelId,
+      });
+    };
+    const when = (row) => {
+      const start = new Date(row.at * 1000).toLocaleString("ko-KR", { month: "long", day: "numeric", hour: "numeric", minute: "2-digit" });
+      if (row.end) return `${start} · ${Math.max(1, Math.round((row.end - row.at) / 60))}분`;
+      return start;
+    };
+    return h(
+      "div",
+      { className: "slack-huddles" },
+      h("h1", null, HUDDLES_LABEL),
+      state.rows.map((row) =>
+        h(
+          "button",
+          { type: "button", className: "slack-files-row", key: row.room, onClick: () => openChannel(row.channelId) },
+          h("span", { className: "slack-files-thumb" }, "🎧"),
+          h(
+            "span",
+            { className: "slack-files-text" },
+            h("span", { className: "slack-files-name" }, row.name || "채널"),
+            h(
+              "span",
+              { className: "slack-files-meta" },
+              row.live ? h("span", { className: "slack-huddles-live" }, "진행 중 · ") : null,
+              [authorName(row.author) && `${authorName(row.author)} 님이 시작`, when(row)].filter(Boolean).join(" · "),
+            ),
+          ),
+        ),
+      ),
+      state.error ? h("p", { className: "slack-files-note" }, state.error) : null,
+      state.loading ? h("p", { className: "slack-files-note" }, "불러오는 중…") : null,
+      !state.loading && !state.rows.length && !state.error ? h("p", { className: "slack-files-note" }, "최근 허들이 없습니다.") : null,
+    );
+  }
+
+  ctx.pages.register({
+    id: "huddles",
+    title: HUDDLES_LABEL,
+    primary: true,
+    placement: "sidebar",
+    icon: iconUrl(HUDDLE_ICON, COLORS.text),
+    component: HuddlesPage,
+  });
+}
+
 // The row itself is plain DOM added after the channel header, like the
 // formatting bar: Buzz has no slot for a row under the channel name.
 function addChannelTabs(ctx) {
@@ -1580,8 +1752,8 @@ function addChannelTabs(ctx) {
   ctx.effect(() => {
     const HEADER =
       '.panel-header:has([aria-label^="Manage members of "], [aria-label^="Channel access for "], [aria-label^="Share access to "], [aria-label^="Chat access for "])';
-    const icon = (d) =>
-      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+    const icon = ([outline, lines]) =>
+      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="${outline}"/>${lines ? `<path d="${lines}"/>` : ""}</svg>`;
     const click = (el) => {
       const options = { bubbles: true, cancelable: true, button: 0, detail: 1 };
       el.dispatchEvent(new PointerEvent("pointerdown", { ...options, pointerType: "mouse" }));
@@ -1636,9 +1808,13 @@ function addChannelTabs(ctx) {
     };
     const paint = () => {
       const pressed = !!(filesLauncher.props && filesLauncher.props.pressed);
+      // Buzz's canvas is showing when its tab in the side pane is selected.
+      const canvas =
+        !pressed &&
+        [...document.querySelectorAll('[role="tab"][aria-selected="true"]')].some((tab) => /^\s*Canvas\b/.test(tab.textContent || ""));
       for (const row of document.querySelectorAll(".slack-channel-tabs")) {
         for (const button of row.children) {
-          const active = button.dataset.tab === "files" ? pressed : button.dataset.tab === "messages" ? !pressed : false;
+          const active = button.dataset.tab === "files" ? pressed : button.dataset.tab === "canvas" ? canvas : !pressed && !canvas;
           if (active) button.dataset.active = "";
           else delete button.dataset.active;
         }
@@ -1804,6 +1980,7 @@ export function apply(ctx) {
   addDockNewButton(ctx);
   addChannelTabs(ctx);
   registerActivityShortcuts(ctx);
+  registerHuddlesPage(ctx);
   registerDockApps(ctx);
   startTranslations(ctx);
   ctx.effect(() => {
