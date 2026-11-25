@@ -44,6 +44,10 @@ const FORMATTING_ALWAYS_OPEN = true;
 // Height (px) of the formatting bar across the top of the message box.
 const FORMAT_BAR_HEIGHT = 38;
 
+// Words after the channel name in an empty message box, like Slack's
+// "#채널에 메시지 보내기". Set to "" to keep Buzz's "Message #channel".
+const PLACEHOLDER_SUFFIX = "에 메시지 보내기";
+
 // Weight of unread channel names in the sidebar (Buzz: 600).
 const UNREAD_WEIGHT = 700;
 
@@ -501,8 +505,20 @@ ${SIDEBAR} details > summary :not(svg, svg *) {
    Slack. Buzz shows it in the bottom row in place of the @, file and emoji
    buttons; those come back when the toolbar is closed with its X. */
 [data-composer-surface]:has([data-formatting-open]) {
-  padding-top: ${FORMAT_BAR_HEIGHT + 8}px !important;
+  padding-top: ${FORMAT_BAR_HEIGHT + 4}px !important;
+  /* The bottom row holds only the send button now, so it sits closer. */
+  --composer-gap: 2px;
 }
+/* Slack grays the formatting buttons out until the message box is in use. */
+[data-composer-surface]:not(:focus-within) [data-formatting-open] :is(button, [role="button"]) {
+  opacity: 0.45;
+}
+${PLACEHOLDER_SUFFIX ? `/* Empty channel message box: Buzz draws "Message", the channel icon and
+   the name; Slack's order is icon, name, then the words. */
+[data-composer-surface] [data-lead="Message"][data-name]::before { content: "" !important; }
+[data-composer-surface] [data-lead="Message"][data-name]::after {
+  content: attr(data-name) ${JSON.stringify(PLACEHOLDER_SUFFIX)} !important;
+}` : ""}
 [data-composer-surface] [data-formatting-open] {
   position: absolute !important;
   top: 0;
