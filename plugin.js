@@ -1143,6 +1143,18 @@ ${POP} [role="option"][aria-selected="true"] {
 ${POP} [role="option"][aria-selected="true"] small { color: #fff !important; }`;
 })()}
 
+/* @here / @channel rows added to the top of the @ suggestions. */
+[data-slack-broadcast] { cursor: default; display: flex; align-items: center; }
+[data-slack-broadcast] .slack-broadcast-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; flex: none;
+}
+[data-slack-broadcast]:hover {
+  background: ${MENTION_SELECTED} !important;
+  color: #fff !important;
+}
+[data-slack-broadcast]:hover small { color: #fff !important; }
+
 /* Mention picker opened from the @ button: the same flat Slack list as the
    @ suggestions (32px rows, 20px rounded pictures, bold name with its detail
    on one line, blue selected row) under one rounded search box. */
@@ -3019,7 +3031,144 @@ function enhanceEmojiPickers(ctx) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// The @ button under the message box types "@" at the cursor, as in Slack,
+// so Buzz's own @ suggestions open in place. Buzz would otherwise open a
+// separate picker with a search box. The click is stopped before Buzz sees
+// it and "@" goes in as typed text.
+const MENTION_BUTTON_TYPES_AT = true;
+
+function slackMentionButton(ctx) {
+  if (!MENTION_BUTTON_TYPES_AT) return;
+  const atButton = (event) =>
+    event.target?.closest?.('[data-composer-surface] button[aria-label="Mention a member"]');
+  // Keep focus and the cursor in the editor while the button is pressed.
+  const hold = (event) => {
+    if (!atButton(event)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+  const press = (event) => {
+    const button = atButton(event);
+    if (!button) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const surface = button.closest("[data-composer-surface]");
+    const editor = surface?.querySelector('[role="textbox"][contenteditable="true"]') || surface?.querySelector('[contenteditable="true"]');
+    if (!editor || button.disabled) return;
+    const selection = window.getSelection();
+    const inside = selection?.rangeCount && editor.contains(selection.getRangeAt(0).startContainer);
+    if (!inside) {
+      editor.focus();
+      const end = document.createRange();
+      end.selectNodeContents(editor);
+      end.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(end);
+    } else if (document.activeElement !== editor && !editor.contains(document.activeElement)) {
+      editor.focus();
+    }
+    // A space first when the cursor sits right after a word.
+    let before = "";
+    if (selection.rangeCount) {
+      const range = selection.getRangeAt(0).cloneRange();
+      range.setStart(editor, 0);
+      before = range.toString();
+    }
+    document.execCommand("insertText", false, before && !/\s$/.test(before) ? " @" : "@");
+  };
+  ctx.effect(() => {
+    document.addEventListener("pointerdown", hold, true);
+    document.addEventListener("mousedown", hold, true);
+    document.addEventListener("click", press, true);
+    return () => {
+      document.removeEventListener("pointerdown", hold, true);
+      document.removeEventListener("mousedown", hold, true);
+      document.removeEventListener("click", press, true);
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// @here / @channel at the top of the @ suggestions, as in Slack. Buzz has no
+// broadcast mention; choosing one types "@here " and the channel alerts of
+// people with this plugin pick it up (see BROADCAST_MENTIONS). Mouse only:
+// the arrow keys and Enter still move through Buzz's own rows.
+const BROADCAST_SUGGESTIONS = [
+  { word: "here", detail: t("이 채널 멤버에게 알림 (Slack Style 사용자)", "Notify this channel (Slack Style users)") },
+  { word: "channel", detail: t("이 채널 멤버에게 알림 (Slack Style 사용자)", "Notify this channel (Slack Style users)") },
+];
+const MEGAPHONE = "M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1zM15 9a3 3 0 0 1 0 6M18 6a7 7 0 0 1 0 12";
+
+function broadcastSuggestions(ctx) {
+  if (!BROADCAST_MENTIONS || !BROADCAST_SUGGESTIONS.length) return;
+  // The "@query" right before the cursor in the focused message box.
+  const typedQuery = () => {
+    const sel = window.getSelection();
+    if (!sel?.rangeCount) return undefined;
+    const node = sel.anchorNode;
+    if (!node || node.nodeType !== Node.TEXT_NODE || !node.parentElement?.closest("[data-composer-surface]")) return undefined;
+    const match = /(^|\s)@([^\s@]*)$/.exec(node.nodeValue.slice(0, sel.anchorOffset));
+    return match ? { node, end: sel.anchorOffset, query: match[2] } : undefined;
+  };
+  const choose = (word) => {
+    const at = typedQuery();
+    if (!at) return;
+    const range = document.createRange();
+    range.setStart(at.node, at.end - at.query.length - 1);
+    range.setEnd(at.node, at.end);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    document.execCommand("insertText", false, `@${word} `);
+  };
+  const svg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${MEGAPHONE}"/></svg>`;
+  const sync = () => {
+    const list = document.querySelector('[data-mention] > [role="listbox"]');
+    const at = list && typedQuery();
+    const want = at ? BROADCAST_SUGGESTIONS.filter((b) => b.word.startsWith(at.query.toLowerCase())) : [];
+    const current = list ? [...list.querySelectorAll(":scope > [data-slack-broadcast]")] : [];
+    const key = want.map((b) => b.word).join(",");
+    if (current.map((el) => el.dataset.slackBroadcast).join(",") === key) return;
+    current.forEach((el) => el.remove());
+    if (!list || !want.length) return;
+    const model = list.querySelector(':scope > [role="option"]');
+    const label = model?.querySelector("[data-completion-label]");
+    const rows = want.map((b) => {
+      const row = document.createElement("div");
+      row.setAttribute("role", "option");
+      row.setAttribute("aria-selected", "false");
+      row.dataset.slackBroadcast = b.word;
+      if (model) row.className = model.className;
+      row.innerHTML =
+        `<span aria-hidden="true" class="slack-broadcast-icon">${svg}</span>` +
+        `<span data-completion-label class="${label?.className ?? ""}"><span><b>@${b.word}</b></span><small>${b.detail}</small></span>`;
+      row.addEventListener("pointerdown", (event) => event.preventDefault());
+      row.addEventListener("mousedown", (event) => event.preventDefault());
+      row.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        choose(b.word);
+      });
+      return row;
+    });
+    list.prepend(...rows);
+  };
+  ctx.effect(() => {
+    const observer = new MutationObserver(sync);
+    observer.observe(document.body, { childList: true, subtree: true });
+    document.addEventListener("selectionchange", sync);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("selectionchange", sync);
+      document.querySelectorAll("[data-slack-broadcast]").forEach((el) => el.remove());
+    };
+  });
+}
+
 export function apply(ctx) {
+  broadcastSuggestions(ctx);
+  slackMentionButton(ctx);
   enhanceEmojiPickers(ctx);
   switchTheme(savedTheme());
   registerLanguageSettings(ctx);
