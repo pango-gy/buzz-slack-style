@@ -287,6 +287,8 @@ const MENTION_CHIP = {
   selfBg: "rgba(242, 199, 68, 0.4)",
   selfHover: "rgba(242, 199, 68, 0.6)",
 };
+// Presence dot on sidebar pictures: size in px, active and away colors.
+const PRESENCE = { size: 9, active: "#2BAC76", away: "rgba(255, 255, 255, 0.65)" };
 // Sidebar marker for channels with a mention or a DM (Slack's red).
 const MENTION_DOT = "#E01E5A";
 
@@ -1300,6 +1302,51 @@ ${SIDEBAR} [data-channel-priority] {
   box-shadow: none !important;
 }
 
+/* Presence on sidebar pictures, as in Slack's DM list: a small dot at the
+   bottom-right corner ringed in the sidebar color; green when active, a
+   hollow ring when away or offline. */
+${SIDEBAR} .buzz-avatar-status-dot {
+  width: ${PRESENCE.size}px !important;
+  height: ${PRESENCE.size}px !important;
+  top: auto !important;
+  left: auto !important;
+  right: -2px !important;
+  bottom: -2px !important;
+  transform: none !important;
+  border-radius: 50% !important;
+  mask: none !important;
+  box-shadow: 0 0 0 2px ${c.sidebar} !important;
+  background: ${PRESENCE.active} !important;
+}
+${SIDEBAR} .buzz-avatar-status .buzz-avatar-status-dot::after { display: none !important; }
+/* The DM picture's box is clipped to rounded corners; let the dot, which
+   sits on the corner, show outside it. */
+${SIDEBAR} [data-dm-identity],
+${SIDEBAR} [data-dm-identity] .buzz-avatar-status {
+  overflow: visible !important;
+  -webkit-mask: none !important;
+  mask: none !important;
+  clip-path: none !important;
+}
+${SIDEBAR} .buzz-avatar-status:is([data-status="away"], [data-status="offline"]) .buzz-avatar-status-dot {
+  background: ${c.sidebar} !important;
+  box-shadow: 0 0 0 2px ${c.sidebar}, inset 0 0 0 1.5px ${PRESENCE.away} !important;
+}
+
+/* Translated thread summaries: the original text stays (Buzz updates it)
+   and the Korean label from data-slack-ko is drawn in its place. */
+[data-thread-summary] [data-slack-ko] { font-size: 0 !important; }
+[data-thread-summary] [data-slack-ko]::after { content: attr(data-slack-ko); font-size: 13px; }
+
+/* Buzz hides the sidebar (visibility) while a page without one is open,
+   such as Agents. Coming back, that hidden state can stay stuck after the
+   sidebar has opened again, leaving it blank. While it is open it is always
+   shown. */
+.shell-navigation[data-sidebar-open],
+.shell-navigation[data-sidebar-open] > .shell-navigation-content {
+  visibility: visible !important;
+}
+
 /* Message author names: Buzz uses medium (500); Slack shows them bold. */
 [data-copy-author] strong,
 [data-copy-author] strong * {
@@ -1431,10 +1478,14 @@ const TRANSLATIONS = LANG === "en" ? {} : {
   "Remove message": "메시지 삭제",
 };
 const TRANSLATION_PATTERNS = LANG === "en" ? [] : [
+  [/^(\d+) repl(?:y|ies)$/, "답글 $1개"],
+  [/^Last reply (.+)$/, "마지막 답글 $1"],
   [/^Remove from (.+)$/, "$1에서 제거"],
   [/^(\d+) unread$/, t("$1개 안 읽음", "$1 unread")],
   [/^(\d+) more$/, t("$1개 더 보기", "$1 more")],
 ];
+// Inside a message row only the thread summary ("4 replies") is translated.
+const TRANSLATE_INSIDE = "[data-thread-summary]";
 const SKIP_TEXT = "[data-highlight-surface], [data-composer-surface], [contenteditable], input, textarea, pre, code";
 
 function translateText(node) {
@@ -1442,7 +1493,7 @@ function translateText(node) {
   const text = raw && raw.trim();
   if (!text || text.length > 40) return;
   const parent = node.parentElement;
-  if (!parent || parent.closest(SKIP_TEXT)) return;
+  if (!parent || (parent.closest(SKIP_TEXT) && !parent.closest(TRANSLATE_INSIDE))) return;
   let next = Object.hasOwn(TRANSLATIONS, text) ? TRANSLATIONS[text] : undefined;
   if (next === undefined) {
     for (const [pattern, replacement] of TRANSLATION_PATTERNS) {
@@ -1467,6 +1518,15 @@ function translated(text) {
 // "channel", "Remove from" + a section name) are matched by their whole
 // label; the first piece gets the translation and the rest are emptied.
 function translateMenuItems(root) {
+  // Thread summaries ("4 replies") change as replies arrive, so their text
+  // is left alone and the translation is shown over it (data-slack-ko).
+  const LABEL = '[data-thread-summary] [class~="buzz-button-label"]';
+  const labels = root.matches?.(LABEL) ? [root] : [...(root.querySelectorAll?.(LABEL) ?? [])];
+  for (const label of labels) {
+    const next = translated(label.textContent.replace(/\s+/g, " ").trim());
+    if (next === undefined) label.removeAttribute("data-slack-ko");
+    else if (label.getAttribute("data-slack-ko") !== next) label.setAttribute("data-slack-ko", next);
+  }
   const items = root.matches?.(".buzz-menu-item") ? [root] : [...(root.querySelectorAll?.(".buzz-menu-item") ?? [])];
   for (const item of items) {
     if (item.classList.contains("slack-notify-option")) continue;
@@ -1487,7 +1547,12 @@ function translateMenuItems(root) {
 
 function translateTree(root) {
   if (root.nodeType === Node.TEXT_NODE) return translateText(root);
-  if (root.nodeType !== Node.ELEMENT_NODE || root.closest?.(SKIP_TEXT)) return;
+  if (root.nodeType !== Node.ELEMENT_NODE) return;
+  // A message row as a whole is skipped, except its thread summary.
+  if (root.closest?.(SKIP_TEXT) && !root.closest?.(TRANSLATE_INSIDE)) {
+    root.querySelectorAll?.(TRANSLATE_INSIDE).forEach((summary) => translateTree(summary));
+    return;
+  }
   if (LANG !== "en") translateMenuItems(root);
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   for (let n = walker.nextNode(); n; n = walker.nextNode()) translateText(n);
@@ -1501,7 +1566,7 @@ function startTranslations(ctx) {
       for (const record of records) {
         if (record.type === "characterData") {
           translateText(record.target);
-          const item = record.target.parentElement?.closest?.(".buzz-menu-item");
+          const item = record.target.parentElement?.closest?.('.buzz-menu-item, [data-thread-summary] [class~="buzz-button-label"]');
           if (item && LANG !== "en") translateMenuItems(item);
         }
         else for (const added of record.addedNodes) translateTree(added);
@@ -2320,6 +2385,8 @@ function channelWanted(scope, channel) {
 // is added to the open menu in place of Buzz's own Mute item (which it then
 // clicks to mute or unmute). Mouse only: arrow keys skip these items.
 const NOTIFY_MENU = true;
+// The older Settings → 채널 메시지 알림 channel list (same data as the menu).
+const ALERT_SETTINGS_SCREEN = false;
 
 function addChannelNotifyMenu(ctx) {
   if (!NOTIFY_MENU || !CHANNEL_ALERTS.enabled) return;
@@ -2473,7 +2540,9 @@ function startChannelAlerts(ctx) {
   const service = ctx.notifications;
   if (!relay?.snapshot || !relay?.subscribe || !service?.register) return;
   const category = service.register({ id: "channel-messages", label: t("채널 메시지", "Channel messages") });
-  registerAlertSettings(ctx);
+  // Channels are now chosen from each channel's right-click menu
+  // ("다음에 대해 알림…"), so the separate Settings screen is not shown.
+  if (ALERT_SETTINGS_SCREEN) registerAlertSettings(ctx);
   const submit = category?.submit;
   if (typeof submit !== "function") return;
 

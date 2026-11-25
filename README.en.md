@@ -48,7 +48,7 @@ Click **Disable** under **Manage plugins → Slack Style** and Buzz returns to i
 - No alert for mentions, DMs and thread replies (Buzz already alerts for those), muted channels, your own messages, or messages older than two minutes (catch-up after reconnecting).
 - No alert for a message Buzz marks read while its window is in front (the channel you have open). When Buzz is in the background, that channel alerts too. Alerts arrive about a second late so this can be checked.
 - **Settings → Notifications → 채널 메시지** turns these alerts on or off and sets their sound.
-- Each person picks their channels under **Settings → 채널 메시지 알림** (all channels, or only selected ones). The choice is saved on their own computer.
+- Per channel, right-click it and use **다음에 대해 알림… (Notify me about…)**: **All new posts** (channel alerts on) / **Mentions only** (channel alerts off) / **Mute** (Buzz's mute). The choice is saved on each person's own computer. These items can't be reached with the arrow keys.
 - People who have not picked yet get the default from `CHANNEL_ALERTS.channels` in `plugin.js` (`"all"` or a list of channel names).
 - Only the community that is currently open can alert.
 - This relies on Buzz's internal live message feed, which is not a documented plugin API. If a Buzz update changes it, channel alerts stop; nothing else is affected.
