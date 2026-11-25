@@ -113,6 +113,9 @@ const DOCK_ICON = 20;
 // Show dock labels under the icons, like Slack's left bar.
 const DOCK_LABELS = true;
 
+// Color of the "new messages" line in a conversation (Slack's red).
+const NEW_LINE_COLOR = "#E01E5A";
+
 // Weight of names above messages: 700 bold, 800 heavier, 900 black.
 const AUTHOR_WEIGHT = 800;
 // Weight of the channel name in the conversation header.
@@ -538,6 +541,40 @@ ${PLACEHOLDER_SUFFIX ? `/* Empty channel message box: Buzz draws "Message", the 
   justify-content: flex-end !important;
 }
 
+/* Date divider: Slack's line across the conversation with the date in a
+   bordered pill (Buzz: a small calendar icon and gray caption). The divider
+   is the element holding the [data-day] label. */
+:has(> span > [data-day]) {
+  gap: 0 !important;
+  color: var(--text-standard) !important;
+}
+:has(> span > [data-day])::before,
+:has(> span > [data-day])::after {
+  height: 1px !important;
+  background: color-mix(in srgb, var(--text-standard) 13%, transparent) !important;
+}
+span:has(> [data-day]) {
+  height: 28px;
+  padding: 0 16px;
+  border: 1px solid color-mix(in srgb, var(--text-standard) 13%, transparent);
+  border-radius: 24px;
+  font-size: 13px;
+  line-height: 27px;
+  font-weight: 700;
+}
+span:has(> [data-day]) > :not([data-day]) { display: none !important; }
+
+/* "New messages" line: Slack draws one red line with a red label at its
+   right end. */
+[data-new-messages-boundary] {
+  color: ${NEW_LINE_COLOR} !important;
+  font-weight: 700;
+  font-size: 13px;
+  gap: 8px !important;
+}
+[data-new-messages-boundary]::before { background: ${NEW_LINE_COLOR} !important; }
+[data-new-messages-boundary]::after { display: none !important; }
+
 /* Message author names: Buzz uses medium (500); Slack shows them bold. */
 [data-copy-author] strong,
 [data-copy-author] strong * {
@@ -646,7 +683,7 @@ const TRANSLATIONS = {
   "Show fewer": "간단히 보기",
   "Show more": "더 보기",
   Agents: "에이전트",
-  "New messages": "새 메시지",
+  "New messages": "새 항목",
   Today: "오늘",
   Yesterday: "어제",
 };
