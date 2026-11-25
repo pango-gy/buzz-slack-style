@@ -1385,6 +1385,50 @@ ${CARD} [data-profile-action] span[aria-hidden="true"] {
 }
 [data-slack-broadcast]:hover small { color: #fff !important; }
 
+/* New message (DM) recipient list, like Slack's: a wide list under the
+   "대상:" field with flat 32px rows, small rounded pictures and a light
+   gray highlight. Rows are [data-recipient-key] (people and channels). */
+[class*="_picker_"]:has([data-recipient-key]) {
+  width: min(900px, var(--available-width, 900px)) !important;
+  padding: 6px 0 !important;
+  border-radius: 8px !important;
+  corner-shape: round !important;
+}
+[data-recipient-key] {
+  min-height: 32px !important;
+  height: auto !important;
+  padding: 2px 20px !important;
+  gap: 10px !important;
+  border-radius: 0 !important;
+  corner-shape: round !important;
+  font-size: 15px !important;
+}
+[data-recipient-key] :is(.buzz-avatar-status, .buzz-avatar, .buzz-avatar img) {
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 0 !important;
+}
+[data-recipient-key] .buzz-avatar,
+[data-recipient-key] .buzz-avatar :is(img, [data-avatar-fallback]) {
+  border-radius: 4px !important;
+  corner-shape: round !important;
+  mask: none !important;
+}
+[data-recipient-key] [data-avatar-fallback] { font-size: 11px !important; }
+[data-recipient-key] .flex-col {
+  flex-direction: row !important;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap !important;
+}
+[data-recipient-key] .flex-col > :first-child,
+[data-recipient-key] .navigation-item-label { font-weight: 700; }
+[data-recipient-key] small { font-size: 15px !important; font-weight: 400; }
+[data-recipient-key]:is([data-selected], [data-highlighted], [aria-selected="true"], :hover) {
+  background: color-mix(in srgb, var(--text-standard) 8%, transparent) !important;
+}
+[aria-label="Recipients"] { font-size: 15px; }
+
 /* Mention picker opened from the @ button: the same flat Slack list as the
    @ suggestions (32px rows, 20px rounded pictures, bold name with its detail
    on one line, blue selected row) under one rounded search box. */
@@ -1785,6 +1829,19 @@ const TRANSLATIONS = LANG === "en" ? {} : {
   // Profile card.
   Profile: "프로필",
   Message: "메시지",
+  // New message (DM) screen.
+  "To:": "대상:",
+  "Find a person…": "사람 이름으로 찾기…",
+  "Find a person or channel…": "#채널 또는 사람 이름으로 찾기…",
+  "Add another person…": "다른 사람 추가…",
+  "Sending message…": "메시지 보내는 중…",
+  "Uploading files…": "파일 올리는 중…",
+  "Loading messages…": "메시지 불러오는 중…",
+  "New message": "새 메시지",
+  "Private channel": "비공개 채널",
+  Channel: "채널",
+  "No matching people.": "일치하는 사람이 없습니다.",
+  Unavailable: "사용할 수 없음",
   // Channel right-click menu.
   "Move to…": "이동…",
   "Move to...": "이동…",
@@ -1804,6 +1861,9 @@ const TRANSLATIONS = LANG === "en" ? {} : {
   "Remove message": "메시지 삭제",
 };
 const TRANSLATION_PATTERNS = LANG === "en" ? [] : [
+  [/^(\d+) (?:person|people) selected$/, "$1명 선택됨"],
+  [/^Type at least (\d+) characters to search people\.$/, "사람을 찾으려면 $1자 이상 입력하세요."],
+  [/^No people or channels match "(.+)"\.$/, "\"$1\"과(와) 일치하는 사람이나 채널이 없습니다."],
   // Buzz writes "A is typing", "A, B are typing", "A, B and 3 others are typing".
   [/^(.+) and (\d+) others are typing$/, "$1 외 $2명이 입력 중입니다"],
   [/^(.+) (?:is|are) typing$/, "$1 님이 입력 중입니다"],
