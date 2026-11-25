@@ -2935,6 +2935,7 @@ function registerLanguageSettings(ctx) {
     const [choice, setChoice] = React.useState(() => savedLanguage() ?? "auto");
     const [theme, setTheme] = React.useState(savedTheme);
     const [custom, setCustom] = React.useState(savedCustomColor);
+    const [applied, setApplied] = React.useState(false);
 
     const pickTheme = (id) => {
       setTheme(id);
@@ -3085,6 +3086,26 @@ function registerLanguageSettings(ctx) {
                 },
               }, t("다시 불러오기", "Reload")))
           : null),
+
+      h("div", { style: { display: "flex", flexDirection: "column", gap: "12px" } },
+        sectionTitle(t("슬랙 권장 설정", "Slack-like settings")),
+        hint(t("메시지 밀도를 Compact로, 스레드를 옆 패널에서 열리도록 바꿉니다. 처음 설치할 때 한 번 적용되며, 바꾼 설정을 되돌리고 싶을 때 누르세요.", "Sets message density to Compact and opens threads in the side pane. Applied once on install; use this to apply it again.")),
+        h("div", { style: { display: "flex", alignItems: "center", gap: "12px" } },
+          h("button", {
+            type: "button",
+            onClick: () => {
+              applyRecommendedSettings();
+              setApplied(true);
+            },
+            style: {
+              border: "1px solid color-mix(in srgb, var(--text-standard) 30%, transparent)", borderRadius: "6px",
+              padding: "6px 12px", fontSize: "13px", fontWeight: 700, cursor: "pointer", background: "transparent", color: "var(--text-standard)",
+            },
+          }, t("다시 적용", "Apply again")),
+          applied
+            ? h("span", { style: { fontSize: "13px", color: "var(--text-subtle)" } },
+                t("적용했어요. 설정 화면 표시는 Buzz를 다시 불러오면 맞춰집니다.", "Applied. The Settings screen catches up after a reload."))
+            : null)),
     );
   }
   cards.register({ id: "language", title: "Slack Style", component: LanguageSettings });
@@ -3543,7 +3564,41 @@ function profileCardAbove(ctx) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Slack-like Buzz settings, set once when the plugin first runs (afterwards
+// each person's own changes are left alone) and again from the button in
+// Settings → Slack Style. Keys and values are Buzz's own (v1.0.6).
+const RECOMMENDED_SETTINGS = [
+  // Appearance → Message density: Compact (flat list, no bubbles).
+  { key: "buzz-message-density.v1", value: "compact", apply: () => (document.documentElement.dataset.messageDensity = "compact") },
+  // Open threads in: Side pane.
+  { key: "buzz-thread-placement.v1", value: "side", apply: () => window.dispatchEvent(new Event("buzz-thread-placement-changed")) },
+];
+const RECOMMENDED_APPLIED_KEY = "slack-style.recommended-applied.v1";
+
+function applyRecommendedSettings() {
+  for (const setting of RECOMMENDED_SETTINGS) {
+    try {
+      localStorage.setItem(setting.key, setting.value);
+      setting.apply();
+    } catch {}
+  }
+  try {
+    localStorage.setItem(RECOMMENDED_APPLIED_KEY, "1");
+  } catch {}
+}
+
+function applyRecommendedOnce() {
+  try {
+    if (localStorage.getItem(RECOMMENDED_APPLIED_KEY)) return;
+  } catch {
+    return;
+  }
+  applyRecommendedSettings();
+}
+
 export function apply(ctx) {
+  applyRecommendedOnce();
   profileCardAbove(ctx);
   nameHoverProfileCard(ctx);
   broadcastHighlights(ctx);

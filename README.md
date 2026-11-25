@@ -28,8 +28,7 @@ Buzz 데스크톱 앱을 슬랙처럼 보이고 쓰이게 바꾸는 플러그인
 
 새 버전이 올라오면 같은 화면에서 Slack Style의 **Update**(또는 **Check for updates**) 버튼을 누르면 됩니다.
 
-권장 설정: **Settings → Appearance → Message density → Compact**
-(말풍선 없이 슬랙처럼 모든 메시지를 왼쪽에 표시합니다.)
+처음 설치하면 슬랙과 비슷한 Buzz 설정이 한 번 자동으로 적용됩니다: **Message density → Compact**(말풍선 없이 모든 메시지를 왼쪽에), **Open threads in → Side pane**(스레드를 옆 패널에서). 이후 직접 바꾼 설정은 그대로 둡니다. 다시 적용하려면 **Settings → Slack Style → 슬랙 권장 설정 → 다시 적용**을 누르세요.
 
 ### 언어와 색상
 

@@ -28,8 +28,7 @@ A plugin that makes the Buzz desktop app look and feel like Slack.
 
 When a new version is published, open the same screen and click **Update** (or **Check for updates**) on Slack Style.
 
-Recommended: **Settings → Appearance → Message density → Compact**
-(shows every message on the left without bubbles, as in Slack).
+On first install, Slack-like Buzz settings are applied once: **Message density → Compact** (every message on the left, no bubbles) and **Open threads in → Side pane**. Later changes you make are left alone. To apply them again, use **Settings → Slack Style → Slack-like settings → Apply again**.
 
 ### Language and color
 
