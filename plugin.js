@@ -1687,6 +1687,8 @@ ${SLACK_MENUS ? `
   color: var(--text-standard) !important; text-decoration: none !important;
   margin-top: 4px;
 }
+.slack-link-card-bare { width: 560px; max-width: 100%; }
+.slack-link-card-bare[hidden] { display: none !important; }
 .slack-link-card:hover { border-color: color-mix(in srgb, var(--text-standard) 25%, transparent); }
 .slack-link-card-text { flex: 1; min-width: 0; padding: 12px 16px; display: flex; flex-direction: column; gap: 4px; }
 .slack-link-card-title { font-size: 15px; font-weight: 700; line-height: 22px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
@@ -3433,9 +3435,11 @@ function linkPreviewCards(ctx) {
     }
     return null;
   };
+  // Buzz's window may show https: images directly (its img-src allows them),
+  // so a picture Buzz could not read for us is shown from its own address.
   const image = (url) => {
     if (!url || !https(url)) return Promise.resolve(null);
-    if (!images.has(url)) images.set(url, readImage(url).catch(() => null));
+    if (!images.has(url)) images.set(url, readImage(url).catch(() => null).then((blob) => blob || url));
     return images.get(url);
   };
   const useAsync = (load, key) => {
@@ -3500,8 +3504,108 @@ function linkPreviewCards(ctx) {
     matches: https,
     component: SlackLinkCard,
   });
+  // Buzz offers only links written with https:// to link previews. A link
+  // typed without it (example.com) still shows as a link, so its card is
+  // added here, under the message, from the same page reader.
+  const bareCard = (href, link) => {
+    const card = document.createElement("a");
+    card.className = "slack-link-card slack-link-card-bare";
+    card.href = href;
+    card.title = href;
+    card.hidden = true;
+    card.addEventListener("click", (event) => {
+      event.preventDefault();
+      link.click();
+    });
+    page(href).then(async (preview) => {
+      if (!preview || !card.isConnected) return;
+      let site = preview.siteName;
+      if (!site) {
+        try {
+          site = new URL(href).hostname.replace(/^www\./, "");
+        } catch {}
+      }
+      const [picture, icon] = await Promise.all([image(preview.image ?? ""), image(preview.icon ?? "")]);
+      const text = document.createElement("div");
+      text.className = "slack-link-card-text";
+      const add = (cls, value) => {
+        if (!value) return null;
+        const el = document.createElement("div");
+        el.className = cls;
+        el.textContent = value;
+        text.append(el);
+        return el;
+      };
+      add("slack-link-card-title", preview.title);
+      add("slack-link-card-description", preview.description);
+      const siteEl = add("slack-link-card-site", " ");
+      if (siteEl) {
+        siteEl.textContent = "";
+        if (icon) {
+          const img = document.createElement("img");
+          img.className = "slack-link-card-icon";
+          img.src = icon;
+          img.alt = "";
+          siteEl.append(img);
+        }
+        const name = document.createElement("span");
+        name.textContent = site || "";
+        siteEl.append(name);
+      }
+      card.append(text);
+      if (picture) {
+        const img = document.createElement("img");
+        img.className = "slack-link-card-image";
+        img.src = picture;
+        img.alt = preview.imageAlt || "";
+        img.addEventListener("error", () => img.remove());
+        card.append(img);
+        card.dataset.hasImage = "";
+      }
+      card.hidden = false;
+    });
+    return card;
+  };
+  const BARE = /^(?!https?:\/\/)[a-z0-9-]+(\.[a-z0-9-]+)+(:\d+)?([/?#]\S*)?$/i;
+  const scanBare = () => {
+    for (const link of document.querySelectorAll("[data-highlight-surface] a[href]")) {
+      if (link.closest(".slack-link-card, [data-link-previews], [data-composer-surface]") || link.dataset.slackBare !== undefined) continue;
+      const label = link.textContent.trim();
+      if (!BARE.test(label)) continue;
+      link.dataset.slackBare = "";
+      const href = `https://${label}`;
+      if (!https(href)) continue;
+      // Below the message text: after the outermost block the link sits in.
+      let block = link.closest("p, li, blockquote, h1, h2, h3, h4, h5, h6") ?? link;
+      while (block.parentElement?.matches("ul, ol, li, blockquote")) block = block.parentElement;
+      const holder = block.parentElement;
+      if (!holder || holder.querySelector(`:scope > .slack-link-card-bare[href="${CSS.escape(href)}"]`)) continue;
+      let after = block;
+      while (after.nextElementSibling && !after.nextElementSibling.matches(".slack-link-card-bare")) after = after.nextElementSibling;
+      while (after.nextElementSibling?.matches(".slack-link-card-bare")) after = after.nextElementSibling;
+      after.after(bareCard(href, link));
+    }
+  };
+  ctx.effect?.(() => {
+    let queued = false;
+    const observer = new MutationObserver(() => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        scanBare();
+      });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    scanBare();
+    return () => {
+      observer.disconnect();
+      document.querySelectorAll(".slack-link-card-bare").forEach((el) => el.remove());
+      document.querySelectorAll("[data-slack-bare]").forEach((el) => delete el.dataset.slackBare);
+    };
+  });
   ctx.effect?.(() => () => {
-    for (const p of images.values()) p.then((u) => u && URL.revokeObjectURL(u));
+    for (const p of images.values()) p.then((u) => u?.startsWith("blob:") && URL.revokeObjectURL(u));
   });
 }
 

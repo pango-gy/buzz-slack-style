@@ -72,8 +72,8 @@ Click **Disable** under **Manage plugins → Slack Style** and Buzz returns to i
 
 ## Link previews
 
-- When a message has an `https://` link, a card with the page's title, description, site name and picture appears under it. Clicking the card opens the link.
-- **Buzz itself** reads the card's content from that page (`host.readPage`). It reads only the page's head, hands the plugin only the title, description and image addresses, and sends no cookies. This is how Slack builds link previews too.
+- When a message has a link (including one written without `https://`, such as `example.com`), a card with the page's title, description, site name and picture appears under it. Clicking the card opens the link.
+- **Buzz itself** reads the card's content from that page (`host.readPage`). It reads only the page's head, hands the plugin only the title, description and image addresses, and sends no cookies. If Buzz cannot fetch the picture, it is shown straight from its address. This is how Slack builds link previews too.
 - So when a link shows in a message, your computer visits that site. Addresses that are not public, such as internal ones, are not read and get no card.
 - Because of this, installing or updating asks you to approve **reading public web pages and images** (`publicPages`, `publicImages`).
 - To turn the cards off, set `LINK_PREVIEWS` in `plugin.js` to `false`.
