@@ -1651,6 +1651,15 @@ ${SIDEBAR} .buzz-avatar-status:is([data-status="away"], [data-status="offline"])
 [data-thread-summary] [data-slack-ko] { font-size: 0 !important; }
 [data-thread-summary] [data-slack-ko]::after { content: attr(data-slack-ko); font-size: 13px; }
 
+/* "… is typing" above the message box: Buzz fixes it to one line height and
+   clips the rest, which cuts off the bottom of Korean glyphs. */
+[data-conversation-activity] {
+  height: auto !important;
+  min-height: 1lh;
+  overflow: visible !important;
+  padding-bottom: 2px !important;
+}
+
 /* Buzz hides the sidebar (visibility) while a page without one is open,
    such as Agents. Coming back, that hidden state can stay stuck after the
    sidebar has opened again, leaving it blank. While it is open it is always
@@ -1795,6 +1804,9 @@ const TRANSLATIONS = LANG === "en" ? {} : {
   "Remove message": "메시지 삭제",
 };
 const TRANSLATION_PATTERNS = LANG === "en" ? [] : [
+  [/^(.+) and (\d+) others are typing$/, "$1 외 $2명이 입력 중입니다"],
+  [/^(.+) and (.+) are typing$/, "$1, $2 님이 입력 중입니다"],
+  [/^(.+) is typing$/, "$1 님이 입력 중입니다"],
   [/^(.+) local time$/, "현지 시간 $1"],
   [/^Managed by (.+)$/, "$1 님이 관리"],
   [/^(\d+) repl(?:y|ies)$/, "답글 $1개"],
@@ -1810,7 +1822,7 @@ const SKIP_TEXT = "[data-highlight-surface], [data-composer-surface], [contented
 function translateText(node) {
   const raw = node.nodeValue;
   const text = raw && raw.trim();
-  if (!text || text.length > 40) return;
+  if (!text || text.length > 80) return;
   const parent = node.parentElement;
   if (!parent || (parent.closest(SKIP_TEXT) && !parent.closest(TRANSLATE_INSIDE))) return;
   let next = Object.hasOwn(TRANSLATIONS, text) ? TRANSLATIONS[text] : undefined;
