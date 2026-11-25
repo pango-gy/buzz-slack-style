@@ -1206,6 +1206,14 @@ ${CHANNEL_TABS ? `/* Tab row under the channel name (added by addChannelTabs), p
   cursor: pointer;
 }` : ""}
 
+/* "다음에 대해 알림…" items added to a channel's right-click menu. */
+.slack-notify-option { cursor: default; }
+.slack-notify-option:hover {
+  background: color-mix(in srgb, var(--text-standard) 8%, transparent);
+}
+.slack-notify-option[aria-checked="true"] .slack-notify-check { color: var(--text-standard); }
+.slack-notify-label { padding-top: 2px; }
+
 /* Message author names: Buzz uses medium (500); Slack shows them bold. */
 [data-copy-author] strong,
 [data-copy-author] strong * {
@@ -1318,6 +1326,24 @@ const TRANSLATIONS = LANG === "en" ? {} : {
   "New messages": t("새 항목", "New messages"),
   Today: t("오늘", "Today"),
   Yesterday: t("어제", "Yesterday"),
+  // Channel right-click menu.
+  "Move to…": "이동…",
+  "Move to...": "이동…",
+  Mute: "음소거",
+  Unmute: "음소거 해제",
+  "Mark as unread": "읽지 않음으로 표시",
+  "Mark as read": "읽음으로 표시",
+  "Copy link": "링크 복사",
+  "Leave channel": "채널 나가기",
+  "Leave conversation": "대화 나가기",
+  "Create new…": "새로 만들기…",
+  "Create new...": "새로 만들기…",
+  "Remove from": "다음에서 제거:",
+  Unfiled: "미분류",
+  "Archive channel": "채널 보관",
+  "Delete channel": "채널 삭제",
+  "Rename…": "이름 바꾸기…",
+  "Remove message": "메시지 삭제",
 };
 const TRANSLATION_PATTERNS = LANG === "en" ? [] : [
   [/^(\d+) unread$/, t("$1개 안 읽음", "$1 unread")],
@@ -2029,8 +2055,8 @@ function registerAlertSettings(ctx) {
       const watch = () => {
         stopList();
         const session = relay.snapshot()?.session;
-        const sub = session?.channels?.subscribeList?.(bump);
-        stopList = typeof sub === "function" ? sub : () => {};
+        const subs = [session?.channels?.subscribeList?.(bump), session?.sidebarPreferences?.subscribe?.(bump)];
+        stopList = () => subs.forEach((stop) => typeof stop === "function" && stop());
         bump();
       };
       watch();
@@ -2055,6 +2081,7 @@ function registerAlertSettings(ctx) {
       mode: CHANNEL_ALERTS.channels === "all" ? "all" : "selected",
       ids: channels.filter((c) => channelWanted(scope, c)).map((c) => c.id),
     };
+    const muted = new Set(session?.sidebarPreferences?.snapshot?.().data?.muted ?? []);
     const set = (next) => scope && alertChoice.write(scope, next);
     const toggle = (id, on) => {
       const ids = new Set(choice.ids);
@@ -2071,7 +2098,7 @@ function registerAlertSettings(ctx) {
       h(
         "p",
         { style: { color: "var(--text-subtle)" } },
-        t("채널에 새 메시지가 오면 알림을 받을 채널을 고릅니다. 멘션·DM·스레드 답글은 여기 설정과 관계없이 Buzz 기본 알림으로 옵니다. 알림 소리와 전체 켜기/끄기는 Notifications의 '채널 메시지'에서 바꿉니다.", "Pick the channels whose new messages alert you. Mentions, DMs and thread replies always use Buzz's own alerts. Turn these alerts on or off, or change their sound, under Notifications → Channel messages."),
+        t("채널에 새 메시지가 오면 알림을 받을 채널을 고릅니다. 채널을 우클릭해 '다음에 대해 알림'에서 바꿔도 같습니다. 음소거한 채널은 알리지 않습니다. 멘션·DM·스레드 답글은 Buzz 기본 알림으로 옵니다.", "Pick the channels whose new messages alert you; right-clicking a channel and using 'Notify me about' does the same. Muted channels never alert. Mentions, DMs and thread replies use Buzz's own alerts."),
       ),
       !session
         ? h("p", null, t("커뮤니티에 연결되면 채널 목록이 나타납니다.", "The channel list appears once you are connected to a community."))
@@ -2119,11 +2146,14 @@ function registerAlertSettings(ctx) {
                       { key: c.id, style: row },
                       h("input", {
                         type: "checkbox",
-                        disabled: choice.mode === "all",
-                        checked: choice.mode === "all" || choice.ids.includes(c.id),
+                        disabled: choice.mode === "all" || muted.has(c.id),
+                        checked: !muted.has(c.id) && (choice.mode === "all" || choice.ids.includes(c.id)),
                         onChange: (e) => toggle(c.id, e.target.checked),
                       }),
                       `# ${c.name}`,
+                      muted.has(c.id)
+                        ? h("span", { style: { fontSize: "12px", color: "var(--text-subtle)" } }, t("음소거됨", "Muted"))
+                        : null,
                     ),
                   ),
             ),
@@ -2161,6 +2191,140 @@ function channelWanted(scope, channel) {
   if (choice) return choice.mode === "all" || choice.ids.includes(channel.id);
   const names = CHANNEL_ALERTS.channels;
   return names === "all" || (Array.isArray(names) && names.includes(channel.name));
+}
+
+// ---------------------------------------------------------------------------
+// Slack's "다음에 대해 알림…" in a channel's right-click menu: All new posts,
+// Mentions only, or Mute. Buzz has no plugin hook for this menu, so the group
+// is added to the open menu in place of Buzz's own Mute item (which it then
+// clicks to mute or unmute). Mouse only: arrow keys skip these items.
+const NOTIFY_MENU = true;
+
+function addChannelNotifyMenu(ctx) {
+  if (!NOTIFY_MENU || !CHANNEL_ALERTS.enabled) return;
+  const relay = ctx.relay;
+  if (!relay?.snapshot) return;
+  const CHECK = "M20 6 9 17l-5-5";
+  const svg = (d) =>
+    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+  const options = [
+    { id: "all", label: t("모든 새 포스트", "All new posts") },
+    { id: "mentions", label: t("멘션만", "Mentions only") },
+    { id: "mute", label: t("음소거", "Mute") },
+  ];
+
+  const muteItemOf = (popup) =>
+    [...popup.querySelectorAll(".buzz-menu-item:not(.slack-notify-option)")].find((el) =>
+      /^(Mute|Unmute|음소거|음소거 해제)$/.test(el.textContent.trim()),
+    );
+
+  // The channel whose menu is open: the row marked as having a context menu,
+  // or else the channel named in the menu's "Actions for <name>" label.
+  const channelOf = (popup, session) => {
+    const channels = session?.channels?.list?.().channels ?? [];
+    const marked = document.querySelector("[data-context-menu-present]");
+    const idEl = marked && (marked.closest("[data-channel-id]") || marked.querySelector("[data-channel-id]"));
+    const id = idEl?.getAttribute("data-channel-id");
+    if (id) return channels.find((c) => c.id === id);
+    const name = (popup.getAttribute("aria-label") || "").replace(/^Actions for /, "");
+    const named = channels.filter((c) => c.name === name);
+    return named.length === 1 ? named[0] : undefined;
+  };
+
+  const closeMenu = (popup) => {
+    popup.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  };
+
+  // Only touches the DOM when something changed: this runs from a
+  // MutationObserver, and writing unconditionally would trigger it again.
+  const paint = (popup, state) => {
+    popup.querySelectorAll(".slack-notify-option").forEach((el) => {
+      const on = el.dataset.option === state ? "true" : "false";
+      if (el.getAttribute("aria-checked") === on) return;
+      el.setAttribute("aria-checked", on);
+      el.querySelector(".slack-notify-check").innerHTML = on === "true" ? svg(CHECK) : "";
+    });
+  };
+
+  const enhance = (popup) => {
+    const snap = relay.snapshot();
+    const session = snap?.status === "ready" ? snap.session : undefined;
+    if (!session) return;
+    const mute = muteItemOf(popup);
+    if (!mute) return;
+    const channel = channelOf(popup, session);
+    if (!channel || channel.huddle || channel.channelType === "dm" || channel.channelType === "solo") return;
+    const scope = typeof session.scope === "string" ? session.scope : "";
+    const isMuted = () => /^(Unmute|음소거 해제)$/.test(mute.textContent.trim());
+    const state = () => (isMuted() ? "mute" : channelWanted(scope, channel) ? "all" : "mentions");
+
+    let group = popup.querySelector(".slack-notify-group");
+    if (!group || group.dataset.channel !== channel.id) {
+      group?.remove();
+      group = document.createElement("div");
+      group.className = "slack-notify-group";
+      group.dataset.channel = channel.id;
+      group.setAttribute("role", "group");
+      group.innerHTML =
+        `<div class="buzz-menu-separator" role="separator"></div>` +
+        `<div class="buzz-menu-group-label slack-notify-label">${t("다음에 대해 알림…", "Notify me about…")}</div>` +
+        options
+          .map(
+            (o) =>
+              `<div class="buzz-menu-item slack-notify-option" role="menuitemradio" tabindex="-1" data-option="${o.id}">` +
+              `<span class="buzz-menu-icon slack-notify-check" aria-hidden="true"></span>${o.label}</div>`,
+          )
+          .join("") +
+        `<div class="buzz-menu-separator" role="separator"></div>`;
+      group.addEventListener("click", (event) => {
+        const option = event.target.closest(".slack-notify-option")?.dataset.option;
+        if (!option) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const muted = isMuted();
+        if (option === "mute") {
+          if (!muted) mute.click();
+        } else {
+          if (muted) mute.click();
+          const s2 = relay.snapshot().session;
+          setChannelAlert(scope, s2, relay.snapshot().viewer, channel.id, option === "all");
+        }
+        paint(popup, option);
+        setTimeout(() => closeMenu(popup), 120);
+      });
+      mute.before(group);
+    }
+    if (mute.style.display !== "none") mute.style.display = "none";
+    paint(popup, state());
+  };
+
+  ctx.effect(() => {
+    const scan = () => document.querySelectorAll(".buzz-menu-popup[data-context-menu], .buzz-menu-popup").forEach((popup) => {
+      if (/^Actions for /.test(popup.getAttribute("aria-label") || "")) enhance(popup);
+    });
+    const observer = new MutationObserver(scan);
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    scan();
+    return () => {
+      observer.disconnect();
+      document.querySelectorAll(".slack-notify-group").forEach((el) => el.remove());
+    };
+  });
+}
+
+// Turn channel alerts on or off for one channel, keeping everything else.
+function setChannelAlert(scope, session, viewer, channelId, on) {
+  if (!scope) return;
+  const all = alertableChannels(session, viewer).map((c) => c.id);
+  const choice = alertChoice.read(scope) ?? {
+    mode: CHANNEL_ALERTS.channels === "all" ? "all" : "selected",
+    ids: alertableChannels(session, viewer).filter((c) => channelWanted(scope, c)).map((c) => c.id),
+  };
+  const ids = new Set(choice.mode === "all" ? all : choice.ids);
+  if (on) ids.add(channelId);
+  else ids.delete(channelId);
+  const everyone = all.every((id) => ids.has(id));
+  alertChoice.write(scope, everyone ? { mode: "all", ids: [...ids] } : { mode: "selected", ids: [...ids] });
 }
 
 function alertableChannels(session, viewer) {
@@ -2470,6 +2634,7 @@ export function apply(ctx) {
   switchTheme(savedTheme());
   registerLanguageSettings(ctx);
   startChannelAlerts(ctx);
+  addChannelNotifyMenu(ctx);
   addFormatBars(ctx);
   addDockNewButton(ctx);
   addChannelTabs(ctx);
