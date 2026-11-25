@@ -1266,9 +1266,12 @@ ${SLACK_MENUS ? `
 }
 .slack-notify-check svg { width: 12px; height: 12px; }
 .slack-notify-icon svg { width: 16px; height: 16px; stroke-width: 2; }
-.slack-notify-option[aria-checked="true"] { color: ${MENU_SELECTED}; }
-:root[data-color-mode="dark"] .slack-notify-option[aria-checked="true"] { color: ${MENU_SELECTED_DARK}; }
-.buzz-menu-popup .buzz-menu-item.slack-notify-option:hover { color: #fff !important; }
+.slack-notify-option[aria-checked="true"],
+.slack-notify-option[aria-checked="true"] .slack-notify-icon { color: ${MENU_SELECTED} !important; }
+:root[data-color-mode="dark"] .slack-notify-option[aria-checked="true"],
+:root[data-color-mode="dark"] .slack-notify-option[aria-checked="true"] .slack-notify-icon { color: ${MENU_SELECTED_DARK} !important; }
+.buzz-menu-popup .buzz-menu-item.slack-notify-option:hover,
+.buzz-menu-popup .buzz-menu-item.slack-notify-option:hover .slack-notify-icon { color: #fff !important; }
 .slack-notify-label { padding-top: 2px; }
 
 /* @mentions in messages: Slack's light blue chip with blue text, and
@@ -1421,7 +1424,6 @@ const TRANSLATIONS = LANG === "en" ? {} : {
   "Leave conversation": "대화 나가기",
   "Create new…": "새로 만들기…",
   "Create new...": "새로 만들기…",
-  "Remove from": "다음에서 제거:",
   Unfiled: "미분류",
   "Archive channel": "채널 보관",
   "Delete channel": "채널 삭제",
@@ -1429,6 +1431,7 @@ const TRANSLATIONS = LANG === "en" ? {} : {
   "Remove message": "메시지 삭제",
 };
 const TRANSLATION_PATTERNS = LANG === "en" ? [] : [
+  [/^Remove from (.+)$/, "$1에서 제거"],
   [/^(\d+) unread$/, t("$1개 안 읽음", "$1 unread")],
   [/^(\d+) more$/, t("$1개 더 보기", "$1 more")],
 ];
@@ -1452,9 +1455,40 @@ function translateText(node) {
   if (next !== undefined && next !== text) node.nodeValue = raw.replace(text, next);
 }
 
+function translated(text) {
+  if (Object.hasOwn(TRANSLATIONS, text)) return TRANSLATIONS[text];
+  for (const [pattern, replacement] of TRANSLATION_PATTERNS) {
+    if (pattern.test(text)) return text.replace(pattern, replacement);
+  }
+  return undefined;
+}
+
+// Menu items whose label Buzz builds from several pieces ("Leave" +
+// "channel", "Remove from" + a section name) are matched by their whole
+// label; the first piece gets the translation and the rest are emptied.
+function translateMenuItems(root) {
+  const items = root.matches?.(".buzz-menu-item") ? [root] : [...(root.querySelectorAll?.(".buzz-menu-item") ?? [])];
+  for (const item of items) {
+    if (item.classList.contains("slack-notify-option")) continue;
+    const walker = document.createTreeWalker(item, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) if (!n.parentElement?.closest("svg")) nodes.push(n);
+    if (nodes.length < 2) continue;
+    const label = nodes.map((n) => n.nodeValue).join("").replace(/\s+/g, " ").trim();
+    const next = translated(label);
+    if (next === undefined || next === label) continue;
+    const first = nodes.find((n) => n.nodeValue.trim());
+    nodes.forEach((n) => {
+      const value = n === first ? next : "";
+      if (n.nodeValue !== value) n.nodeValue = value;
+    });
+  }
+}
+
 function translateTree(root) {
   if (root.nodeType === Node.TEXT_NODE) return translateText(root);
   if (root.nodeType !== Node.ELEMENT_NODE || root.closest?.(SKIP_TEXT)) return;
+  if (LANG !== "en") translateMenuItems(root);
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   for (let n = walker.nextNode(); n; n = walker.nextNode()) translateText(n);
 }
@@ -1465,7 +1499,11 @@ function startTranslations(ctx) {
     translateTree(document.body);
     const observer = new MutationObserver((records) => {
       for (const record of records) {
-        if (record.type === "characterData") translateText(record.target);
+        if (record.type === "characterData") {
+          translateText(record.target);
+          const item = record.target.parentElement?.closest?.(".buzz-menu-item");
+          if (item && LANG !== "en") translateMenuItems(item);
+        }
         else for (const added of record.addedNodes) translateTree(added);
       }
     });
