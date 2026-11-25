@@ -3140,24 +3140,27 @@ const MEGAPHONE = "M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1zM15 9a3 3 
 
 function broadcastSuggestions(ctx) {
   if (!BROADCAST_MENTIONS || !BROADCAST_SUGGESTIONS.length) return;
-  // The "@query" right before the cursor in the focused message box.
+  // The "@query" right before the cursor in the focused message box. Buzz
+  // may wrap a mention being typed in its own element, so the whole text
+  // from the start of the box to the cursor is read, not one text node.
   const typedQuery = () => {
     const sel = window.getSelection();
-    if (!sel?.rangeCount) return undefined;
-    const node = sel.anchorNode;
-    if (!node || node.nodeType !== Node.TEXT_NODE || !node.parentElement?.closest("[data-composer-surface]")) return undefined;
-    const match = /(^|\s)@([^\s@]*)$/.exec(node.nodeValue.slice(0, sel.anchorOffset));
-    return match ? { node, end: sel.anchorOffset, query: match[2] } : undefined;
+    if (!sel?.rangeCount || !sel.isCollapsed) return undefined;
+    const caret = sel.getRangeAt(0);
+    const editor = (caret.startContainer.nodeType === Node.ELEMENT_NODE ? caret.startContainer : caret.startContainer.parentElement)
+      ?.closest?.('[data-composer-surface] [contenteditable="true"]');
+    if (!editor) return undefined;
+    const before = caret.cloneRange();
+    before.setStart(editor, 0);
+    const match = /(^|\s)@([^\s@]*)$/.exec(before.toString());
+    return match ? { editor, caret, query: match[2] } : undefined;
   };
   const choose = (word) => {
     const at = typedQuery();
     if (!at) return;
-    const range = document.createRange();
-    range.setStart(at.node, at.end - at.query.length - 1);
-    range.setEnd(at.node, at.end);
+    // Select back over "@query" from the cursor, then type the word.
     const sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(range);
+    for (let i = 0; i < at.query.length + 1; i++) sel.modify("extend", "backward", "character");
     document.execCommand("insertText", false, `@${word} `);
   };
   const svg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${MEGAPHONE}"/></svg>`;
@@ -3181,10 +3184,9 @@ function broadcastSuggestions(ctx) {
       own.innerHTML = "";
       own.append(...want.map((b, i) => makeRow(b, i === 0)));
     }
-    const range = document.createRange();
-    range.setStart(at.node, Math.max(0, at.end - at.query.length - 1));
-    range.setEnd(at.node, at.end);
-    const rect = range.getBoundingClientRect();
+    const rect = at.caret.getBoundingClientRect().width || at.caret.getBoundingClientRect().height
+      ? at.caret.getBoundingClientRect()
+      : at.editor.getBoundingClientRect();
     const height = own.offsetHeight || 80;
     own.style.left = `${Math.max(8, rect.left - 12)}px`;
     own.style.top = `${Math.max(8, rect.top - height - 8)}px`;
@@ -3219,7 +3221,7 @@ function broadcastSuggestions(ctx) {
     closeOwn();
   };
   const sync = () => {
-    const list = document.querySelector('[data-mention] > [role="listbox"]');
+    const list = document.querySelector('[data-mention] [role="listbox"]');
     const typed = typedQuery();
     const typedWant = typed
       ? BROADCAST_SUGGESTIONS.filter((b) => b.word.startsWith(typed.query.toLowerCase()))
@@ -3233,7 +3235,7 @@ function broadcastSuggestions(ctx) {
     if (current.map((el) => el.dataset.slackBroadcast).join(",") === key) return;
     current.forEach((el) => el.remove());
     if (!list || !want.length) return;
-    const model = list.querySelector(':scope > [role="option"]');
+    const model = list.querySelector('[role="option"]:not([data-slack-broadcast])');
     const label = model?.querySelector("[data-completion-label]");
     const rows = want.map((b) => {
       const row = makeRow(b, false);
@@ -3249,6 +3251,7 @@ function broadcastSuggestions(ctx) {
     observer.observe(document.body, { childList: true, subtree: true });
     document.addEventListener("selectionchange", sync);
     document.addEventListener("keydown", onKey, true);
+    sync();
     return () => {
       observer.disconnect();
       document.removeEventListener("selectionchange", sync);
