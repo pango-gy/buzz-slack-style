@@ -2971,15 +2971,11 @@ function addChannelNotifyMenu(ctx) {
         event.stopPropagation();
         const muted = isMuted();
         if (option === "mute") {
-          // Both items are still on the page here; React closes the menu later.
-          const close = dm ? closeItem() : undefined;
           if (!muted) mute.click();
-          if (close) {
-            close.click();
-            return;
-          }
+          if (dm) slackHiddenDms.set(scope, channel.id, true);
         } else {
           if (muted) mute.click();
+          if (dm) slackHiddenDms.set(scope, channel.id, false);
           if (dm) dmMentionsOnly.set(scope, channel.id, option === "mentions");
           else setChannelAlert(scope, relay.snapshot().session, relay.snapshot().viewer, channel.id, option === "all");
         }
@@ -2989,6 +2985,23 @@ function addChannelNotifyMenu(ctx) {
       mute.before(box);
     }
     if (mute.style.display !== "none") mute.style.display = "none";
+    // Buzz's own "대화 닫기" removes the row for good until a new message;
+    // this plugin's hiding instead keeps the DM in the sidebar while it is
+    // open, as Slack does, so the item hides it the same way.
+    const close = dm ? closeItem() : undefined;
+    if (close && !close.dataset.slackHide) {
+      close.dataset.slackHide = "";
+      const hide = (event) => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        slackHiddenDms.set(scope, channel.id, true);
+        closeMenu(popup);
+      };
+      close.addEventListener("click", hide, true);
+      close.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") hide(event);
+      }, true);
+    }
     paint(popup, state());
   };
 
@@ -3006,10 +3019,120 @@ function addChannelNotifyMenu(ctx) {
   });
 }
 
+// DMs hidden with "음소거 및 숨기기" or "대화 닫기", saved per community on this
+// computer. Slack keeps a hidden DM out of the sidebar except while it is
+// open, so this hides the row with CSS unless it is the selected one, rather
+// than using Buzz's own hiding, which drops the row until a new message.
+const slackHiddenDms = {
+  listeners: new Set(),
+  key: (scope) => `slack-style.hidden-dms.v1:${scope}`,
+  read(scope) {
+    try {
+      const ids = JSON.parse(localStorage.getItem(this.key(scope)) || "[]");
+      return new Set(Array.isArray(ids) ? ids.filter((id) => typeof id === "string") : []);
+    } catch {
+      return new Set();
+    }
+  },
+  set(scope, id, on) {
+    if (!scope) return;
+    const ids = this.read(scope);
+    if (ids.has(id) === on) return;
+    if (on) ids.add(id);
+    else ids.delete(id);
+    try {
+      localStorage.setItem(this.key(scope), JSON.stringify([...ids]));
+    } catch {}
+    for (const listener of this.listeners) listener();
+  },
+  subscribe(listener) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  },
+};
+
+// Buzz's own closed DMs (buzz-view.v1:[scope,"hidden-dms"]), from before
+// this plugin hid DMs itself or from a menu it did not reach.
+function buzzHiddenDmIds(scope) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(`buzz-view.v1:${JSON.stringify([scope, "hidden-dms"])}`) || "[]");
+    return (Array.isArray(raw) ? raw : []).map((entry) => (typeof entry === "string" ? entry : entry?.id)).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+// A DM's name as the sidebar shows it: the other people's names. Relay DMs
+// carry a placeholder name such as "Group DM (3)", so that is not used.
+function dmTitle(channel, session) {
+  const profiles = session.profiles?.snapshot?.();
+  const people = (channel.participants ?? []).map((key) => {
+    const p = profiles?.get?.(key);
+    return p?.displayName || p?.name || "";
+  });
+  if (people.length && people.every(Boolean)) return people.join(", ");
+  if (channel.name && !/^(Group )?DM( \(\d+\))?$/i.test(channel.name)) return channel.name;
+  return people.filter(Boolean).join(", ") || channel.name || channel.id.slice(0, 10);
+}
+
+function hiddenDmRows(ctx) {
+  const relay = ctx.relay;
+  if (!relay?.snapshot) return;
+  const style = document.createElement("style");
+  style.id = "slack-style-hidden-dms";
+  let scope = "";
+  const paint = () => {
+    const ids = scope ? [...slackHiddenDms.read(scope)] : [];
+    const esc = (id) => (typeof CSS !== "undefined" && CSS.escape ? CSS.escape(id) : id);
+    const css = ids.length
+      ? `${ids.map((id) => `[data-channel-sidebar-row][data-channel-id="${esc(id)}"]:not([data-selected])`).join(",\n")} { display: none !important; }`
+      : "";
+    if (style.textContent !== css) style.textContent = css;
+  };
+  ctx.effect(() => {
+    document.head.append(style);
+    let stopIncoming;
+    const attach = () => {
+      const snap = relay.snapshot();
+      const session = snap?.status === "ready" ? snap.session : undefined;
+      const next = typeof session?.scope === "string" ? session.scope : "";
+      if (next !== scope) {
+        scope = next;
+        stopIncoming?.();
+        stopIncoming = undefined;
+        // As in Slack, a new message brings a hidden DM back unless it is muted.
+        if (session?.subscribeIncoming) {
+          const viewer = scope.slice(scope.lastIndexOf(":") + 1);
+          stopIncoming = session.subscribeIncoming((messages) => {
+            const hidden = slackHiddenDms.read(scope);
+            if (!hidden.size) return;
+            const muted = new Set(session.sidebarPreferences?.snapshot?.().data?.muted ?? []);
+            for (const m of messages ?? []) {
+              const author = m.authorId ?? m.pubkey ?? m.author;
+              if (hidden.has(m.channelId) && !muted.has(m.channelId) && author !== viewer)
+                slackHiddenDms.set(scope, m.channelId, false);
+            }
+          });
+        }
+      }
+      paint();
+    };
+    const stopStore = slackHiddenDms.subscribe(paint);
+    const stopRelay = relay.subscribe?.(attach);
+    attach();
+    return () => {
+      stopStore();
+      stopRelay?.();
+      stopIncoming?.();
+      style.remove();
+    };
+  });
+}
+
 // Right-clicking the 다이렉트 메시지 title opens Slack's section menu: start a
-// DM, and the conversations that are closed (hidden) or muted, so a closed DM
-// can be found again. Picking one opens it, and Buzz puts an opened DM back
-// in the sidebar.
+// DM, the hidden conversations and the muted ones (a DM that is both is
+// listed once, under muted). Picking one opens it; a hidden DM shows in the
+// sidebar only while it is open.
 const DM_SECTION_MENU = true;
 const DM_MENU_LIMIT = 10;
 
@@ -3017,30 +3140,6 @@ function dmSectionMenu(ctx) {
   if (!DM_SECTION_MENU || !ctx.relay?.snapshot) return;
   const relay = ctx.relay;
   const esc = (text) => String(text).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
-
-  // Buzz keeps closed DMs on this computer under buzz-view.v1:[scope,"hidden-dms"].
-  const hiddenIds = (scope) => {
-    try {
-      const raw = JSON.parse(localStorage.getItem(`buzz-view.v1:${JSON.stringify([scope, "hidden-dms"])}`) || "[]");
-      const list = Array.isArray(raw) ? raw : Array.isArray(raw?.value) ? raw.value : [];
-      return list.map((entry) => (typeof entry === "string" ? entry : entry?.id)).filter(Boolean);
-    } catch {
-      return [];
-    }
-  };
-
-  const titleOf = (channel, session, viewer) => {
-    if (channel.name) return channel.name;
-    const profiles = session.profiles?.snapshot?.();
-    const names = (channel.members ?? [])
-      .map((m) => (typeof m === "string" ? m : m?.pubkey))
-      .filter((key) => key && key !== viewer)
-      .map((key) => {
-        const p = profiles?.get?.(key);
-        return p?.displayName || p?.name || key.slice(0, 10);
-      });
-    return names.join(", ") || channel.id.slice(0, 10);
-  };
 
   let open = null;
   const close = () => {
@@ -3055,17 +3154,18 @@ function dmSectionMenu(ctx) {
     if (!session) return false;
     const scope = typeof session.scope === "string" ? session.scope : "";
     const at = scope.lastIndexOf(":");
-    const viewer = at >= 0 ? scope.slice(at + 1) : "";
     const dms = (session.channels?.list?.().channels ?? []).filter((c) => c.channelType === "dm");
     const byId = new Map(dms.map((c) => [c.id, c]));
-    const hidden = hiddenIds(scope).filter((id) => byId.has(id));
+    const buzzHidden = new Set(buzzHiddenDmIds(scope));
     const muted = (session.sidebarPreferences?.snapshot?.().data?.muted ?? []).filter((id) => byId.has(id));
+    const mutedSet = new Set(muted);
+    const hidden = [...new Set([...slackHiddenDms.read(scope), ...buzzHidden])].filter((id) => byId.has(id) && !mutedSet.has(id));
     const startButton = [...section.querySelectorAll("button")].find(
       (b) => !b.closest("summary") && /new|start|message|메시지/i.test(b.getAttribute("aria-label") || b.title || ""),
     );
 
     const row = (id) =>
-      `<div class="buzz-menu-item slack-dm-menu-item" role="menuitem" tabindex="-1" data-channel="${esc(id)}">${esc(titleOf(byId.get(id), session, viewer))}</div>`;
+      `<div class="buzz-menu-item slack-dm-menu-item" role="menuitem" tabindex="-1" data-channel="${esc(id)}">${esc(dmTitle(byId.get(id), session))}</div>`;
     const list = (label, ids, empty) =>
       `<div class="buzz-menu-separator" role="separator"></div>` +
       `<div class="buzz-menu-group-label">${label}</div>` +
@@ -3085,18 +3185,40 @@ function dmSectionMenu(ctx) {
       list(t("음소거된 대화", "Muted conversations"), muted, t("음소거된 대화가 없습니다", "No muted conversations"));
     if (!startButton) menu.querySelector(".buzz-menu-separator")?.remove();
 
+    // Names of people not loaded yet fill in once their profiles arrive.
+    const shownIds = [...hidden.slice(0, DM_MENU_LIMIT), ...muted.slice(0, DM_MENU_LIMIT)];
+    const missing = [...new Set(shownIds.flatMap((id) => byId.get(id)?.participants ?? []))].filter(
+      (key) => !session.profiles?.snapshot?.().get?.(key),
+    );
+    if (missing.length && typeof session.profiles?.ensure === "function") {
+      Promise.resolve(session.profiles.ensure(missing))
+        .catch(() => {})
+        .then(() => {
+          if (open !== menu) return;
+          menu.querySelectorAll(".slack-dm-menu-item[data-channel]").forEach((el) => {
+            const channel = byId.get(el.dataset.channel);
+            if (channel) el.textContent = dmTitle(channel, session);
+          });
+        });
+    }
+
     menu.addEventListener("click", (event) => {
       const item = event.target.closest(".slack-dm-menu-item");
       if (!item) return;
       close();
       if (item.hasAttribute("data-start")) startButton?.click();
-      else if (item.dataset.channel && at >= 0)
+      else if (item.dataset.channel && at >= 0) {
+        const id = item.dataset.channel;
+        // Opening a DM Buzz itself closed brings its row back; taking it into
+        // this plugin's hiding keeps it hidden again once you leave it.
+        if (buzzHidden.has(id)) slackHiddenDms.set(scope, id, true);
         void ctx.navigation.open({
           version: 1,
           kind: "conversation",
           scope: { communityOrigin: scope.slice(0, at), viewer: scope.slice(at + 1) },
-          channelId: item.dataset.channel,
+          channelId: id,
         });
+      }
     });
     document.body.append(menu);
     const box = menu.getBoundingClientRect();
@@ -4203,6 +4325,7 @@ export function apply(ctx) {
   startChannelAlerts(ctx);
   addChannelNotifyMenu(ctx);
   groupDmMentionGate(ctx);
+  hiddenDmRows(ctx);
   dmSectionMenu(ctx);
   linkPreviewCards(ctx);
   addFormatBars(ctx);
