@@ -77,6 +77,11 @@ const FORMAT_BUTTONS = [
 const COMPOSER_BORDER = 15;
 const COMPOSER_BORDER_FOCUS = 35;
 
+// Message box buttons, both rows: icon size and the gap between the 28px
+// buttons, in px (Slack: 18 and 4; Buzz: 16px icons in 36px buttons).
+const COMPOSER_ICON = 18;
+const COMPOSER_BUTTON_GAP = 4;
+
 // Buttons under the message box from the left, by Buzz's own (English)
 // button names, in Slack's order: attach, Aa, emoji, mention. Others follow.
 const COMPOSER_BUTTON_ORDER = ["Attach files", "Toggle formatting", "Emoji and GIFS", "Mention a member"];
@@ -91,6 +96,13 @@ const PLACEHOLDERS = {
   "Reply ": "답글...",
   "Edit message": "메시지 편집",
 };
+
+// Corner radius (px) of the sidebar and conversation card, and of other
+// panels in the workspace (Slack: about 10; Buzz: a much rounder panel).
+const CARD_RADIUS = 10;
+
+// Height (px) of the search box in the top bar (Slack: 28; Buzz: 36).
+const SEARCH_HEIGHT = 28;
 
 // Weight of unread channel names in the sidebar (Buzz: 600).
 const UNREAD_WEIGHT = 700;
@@ -158,6 +170,12 @@ const PINNED_ORDER = ACTIVITY_ROWS.map((row) => row.label);
 // Dock icon tile and glyph size in px (Slack's tile is about 36).
 const DOCK_TILE = 36;
 const DOCK_ICON = 20;
+
+// Move Buzz's round + button from the bottom of the sidebar into the left
+// bar, above the workspace button, as in Slack. The number is its distance
+// (px) from the bottom of the window.
+const DOCK_NEW_BUTTON = true;
+const DOCK_NEW_BUTTON_BOTTOM = 106;
 
 // Show dock labels under the icons, like Slack's left bar.
 const DOCK_LABELS = true;
@@ -388,6 +406,22 @@ ${CHROME} { color: ${c.textStrong}; }
   border-color: transparent !important;
   color: ${c.text} !important;
 }
+/* Search box in the top bar: Slack's wide, low box with small corners and
+   white text from the left (Buzz: a narrower, taller pill with a ⌘K chip). */
+.shell-menu-search { max-width: min(52rem, 43vw) !important; }
+.shell-menu-search > .buzz-button,
+.shell-menu-search > .buzz-button::before,
+.shell-menu-search > .buzz-button::after {
+  border-radius: 6px !important;
+  corner-shape: round !important;
+}
+.shell-menu-search > .buzz-button {
+  height: ${SEARCH_HEIGHT}px !important;
+  min-height: ${SEARCH_HEIGHT}px !important;
+  padding-inline: 8px !important;
+}
+.shell-menu-search .shell-search-content { color: ${c.textStrong} !important; font-size: 13px; }
+.shell-menu-search .shell-search-content > :nth-child(n + 3) { display: none !important; }
 
 /* The joined outer panel becomes see-through, so the sidebar sits on the
    chrome and only the conversation is a white card. */
@@ -405,8 +439,16 @@ ${CHROME} { color: ${c.textStrong}; }
 
 /* Sidebar and conversation form one card: rounded only on its outer
    corners, square where they meet. */
+#main-content > .panel,
+#main-content > .panel::before,
+#main-content > .panel::after,
+${SIDEBAR} { corner-shape: round !important; }
+/* Every panel in the workspace takes its corners from this value: the
+   outer joined panel clips the sidebar and conversation to it. */
+.shell-body { --radius-container: ${CARD_RADIUS}px; }
+.shell-body .panel { corner-shape: round !important; }
 #main-content > .panel {
-  border-radius: 0 var(--radius-container) var(--radius-container) 0;
+  border-radius: 0 ${CARD_RADIUS}px ${CARD_RADIUS}px 0 !important;
   overflow: hidden;
   box-shadow: var(--shadow-panel);
 }
@@ -416,7 +458,7 @@ ${CHROME} { color: ${c.textStrong}; }
 ${SIDEBAR} {
   background: ${c.sidebar};
   color: ${c.text};
-  border-radius: var(--radius-container) 0 0 var(--radius-container);
+  border-radius: ${CARD_RADIUS}px 0 0 ${CARD_RADIUS}px !important;
   margin-inline-end: 0;
 }
 ${SIDEBAR}, ${SIDEBAR} * {
@@ -450,19 +492,45 @@ ${CHROME}, ${CHROME} * {
 ${DOCK_LABELS ? dockLabelCss(c) : ""}
 
 /* Message box: Slack's squarer box with a gray border that darkens on focus. */
+/* The border is a solid gray, not a see-through one: a see-through 1px
+   line thins out around the corners. */
 [data-composer-surface] {
   border-radius: 8px !important;
   /* Buzz draws corners as squircles, which thin the border out at a small
      radius; plain round corners keep it even. */
   corner-shape: round !important;
   box-shadow: none !important;
-  border-color: color-mix(in srgb, var(--text-standard) ${COMPOSER_BORDER}%, transparent) !important;
+  border-color: color-mix(in srgb, var(--text-standard) ${COMPOSER_BORDER}%, var(--surface-composer, #fff)) !important;
 }
 [data-composer-surface]:focus-within {
-  border-color: color-mix(in srgb, var(--text-standard) ${COMPOSER_BORDER_FOCUS}%, transparent) !important;
+  border-color: color-mix(in srgb, var(--text-standard) ${COMPOSER_BORDER_FOCUS}%, var(--surface-composer, #fff)) !important;
   outline: none !important;
   box-shadow: none !important;
 }
+
+${DOCK_NEW_BUTTON ? `/* The round + button floats over the bottom of the sidebar in Buzz; Slack
+   keeps it in the left bar above the workspace and profile buttons. Buzz's
+   button can't leave the sidebar, so it is made invisible and a copy in the
+   left bar (added by addDockNewButton) presses it. */
+${SIDEBAR} [aria-label="New options"] { opacity: 0 !important; pointer-events: none !important; }
+.slack-new-button {
+  all: unset;
+  position: fixed;
+  left: 16px;
+  bottom: ${DOCK_NEW_BUTTON_BOTTOM}px;
+  width: 36px;
+  height: 36px;
+  display: none;
+  place-items: center;
+  border-radius: 50%;
+  background: ${c.dockSelected};
+  color: ${c.textStrong};
+  cursor: pointer;
+  z-index: 5;
+}
+.slack-new-button:hover { background: rgba(255, 255, 255, 0.3); }
+.slack-new-button svg { width: 20px; height: 20px; }
+body:has(${SIDEBAR} [aria-label="New options"]) .slack-new-button { display: grid; }` : ""}
 
 /* Sidebar rows: Slack's slightly rounded rectangle instead of a pill. */
 ${SIDEBAR} [data-variant="row"],
@@ -634,8 +702,8 @@ ${FORMAT_BAR ? `/* Slack's formatting bar across the top of the message box (add
   box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding-inline: 6px;
+  gap: ${COMPOSER_BUTTON_GAP}px;
+  padding-inline: 4px;
   z-index: 1;
   background: color-mix(in srgb, var(--text-standard) 4%, var(--surface-composer, transparent));
   border-bottom: 1px solid color-mix(in srgb, var(--text-standard) 8%, transparent);
@@ -655,18 +723,32 @@ ${FORMAT_BAR ? `/* Slack's formatting bar across the top of the message box (add
   place-items: center;
   border-radius: 4px;
   color: color-mix(in srgb, var(--text-standard) 70%, transparent);
-  font-size: 15px;
+  font-size: 17px;
   line-height: 1;
   cursor: pointer;
 }
 .slack-format-bar > button:hover { background: color-mix(in srgb, var(--text-standard) 8%, transparent); color: var(--text-standard); }
-.slack-format-bar > button svg { display: block; width: 17px; height: 17px; }
+.slack-format-bar > button svg { display: block; width: ${COMPOSER_ICON}px; height: ${COMPOSER_ICON}px; }
 .slack-format-bar > span {
   flex: none;
   width: 1px;
   height: 20px;
   margin: 0 5px;
   background: color-mix(in srgb, var(--text-standard) 13%, transparent);
+}
+/* Bottom row (marked by addFormatBars): Slack packs its buttons closer and
+   draws the icons larger inside them. */
+.slack-composer-row { gap: ${COMPOSER_BUTTON_GAP}px !important; }
+.slack-composer-row :is(button, [role="button"]) {
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+}
+.slack-composer-row :is(button, [role="button"]) svg {
+  width: ${COMPOSER_ICON}px !important;
+  height: ${COMPOSER_ICON}px !important;
 }
 /* Slack grays the formatting buttons out until the message box is in use. */
 [data-composer-surface]:not(:focus-within) .slack-format-bar > button { opacity: 0.45; }` : ""}
@@ -948,6 +1030,7 @@ function registerDockApps(ctx) {
 // Add or change entries freely; a pattern entry uses $1 for the number.
 const TRANSLATIONS = {
   Activity: "내 활동",
+  Search: "검색",
   All: "전체",
   Threads: "스레드",
   Mentions: "멘션",
@@ -1112,6 +1195,7 @@ function addFormatBars(ctx) {
         }
       };
       place(row);
+      row.classList.add("slack-composer-row");
     };
     const scan = () => {
       // A Buzz toolbar left open earlier is closed, so the bottom row returns.
@@ -1136,13 +1220,41 @@ function addFormatBars(ctx) {
       observer.disconnect();
       document.removeEventListener("click", onClick, true);
       delete root.dataset.slackFormatBar;
+      document.querySelectorAll(".slack-composer-row").forEach((row) => row.classList.remove("slack-composer-row"));
       document.querySelectorAll(".slack-format-bar").forEach((bar) => bar.remove());
     };
   });
 }
 
+// Slack's + button in the left bar. It presses Buzz's own (now invisible) +
+// button at the bottom of the sidebar, so the same menu opens.
+function addDockNewButton(ctx) {
+  if (!DOCK_NEW_BUTTON) return;
+  ctx.effect(() => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "slack-new-button";
+    button.title = "새로 만들기";
+    button.setAttribute("aria-label", "새로 만들기");
+    button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+    button.addEventListener("click", () => {
+      const target = document.querySelector(`${SIDEBAR} [aria-label="New options"]`);
+      if (!target) return;
+      const options = { bubbles: true, cancelable: true, button: 0, detail: 1 };
+      target.dispatchEvent(new PointerEvent("pointerdown", { ...options, pointerType: "mouse" }));
+      target.dispatchEvent(new MouseEvent("mousedown", options));
+      target.dispatchEvent(new PointerEvent("pointerup", { ...options, pointerType: "mouse" }));
+      target.dispatchEvent(new MouseEvent("mouseup", options));
+      target.dispatchEvent(new MouseEvent("click", options));
+    });
+    document.body.appendChild(button);
+    return () => button.remove();
+  });
+}
+
 export function apply(ctx) {
   addFormatBars(ctx);
+  addDockNewButton(ctx);
   registerActivityShortcuts(ctx);
   registerDockApps(ctx);
   startTranslations(ctx);
