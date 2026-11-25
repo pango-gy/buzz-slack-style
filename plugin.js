@@ -1866,6 +1866,15 @@ function previewText(text) {
     .slice(0, 200);
 }
 
+// The Buzz window is in front and this channel is the one open (its sidebar
+// row is selected). Buzz's own "viewing" flag only turns on once the new
+// message has been drawn, which is too late for a fresh arrival.
+function isViewingChannel(channelId) {
+  if (document.visibilityState !== "visible" || !document.hasFocus()) return false;
+  const id = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(channelId) : channelId;
+  return !!document.querySelector(`[data-channel-sidebar-row][data-selected][data-channel-id="${id}"]`);
+}
+
 function startChannelAlerts(ctx) {
   if (!CHANNEL_ALERTS.enabled) return;
   const relay = ctx.relay;
@@ -1899,6 +1908,7 @@ function startChannelAlerts(ctx) {
         if (attention.rootId && attention.rootId !== message.messageId) return false;
         if (CHANNEL_ALERTS.skipWhileViewing && attention.viewing) return false;
       }
+      if (CHANNEL_ALERTS.skipWhileViewing && isViewingChannel(message.channelId)) return false;
       return channel;
     };
 
@@ -1932,13 +1942,13 @@ function startChannelAlerts(ctx) {
       if (closed || session !== owned) return;
       const age = Date.now() - message.createdAt * 1000;
       if (age < -30000 || age > 120000) return;
-      const verdict = decide(owned, viewer, message);
+      const verdict = tries === 0 ? "wait" : decide(owned, viewer, message);
       if (verdict === "wait") {
-        if (tries >= 5) return;
+        if (tries >= 6) return;
         const timer = setTimeout(() => {
           timers.delete(timer);
           consider(owned, viewer, message, tries + 1);
-        }, 800);
+        }, tries === 0 ? 1200 : 800);
         timers.add(timer);
         return;
       }
