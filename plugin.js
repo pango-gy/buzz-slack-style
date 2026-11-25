@@ -888,6 +888,20 @@ ${SIDEBAR} details > summary :not(svg, svg *) {
   height: ${SIZES.messageAvatar}px !important;
   min-width: 0 !important;
 }
+/* Agents' "available" pill beside their picture (and its notch cut into
+   the picture) is not something Slack shows; hidden in messages and cards.
+   The "thinking" animation stays. People's presence dots are hidden in
+   messages too, as in Slack. */
+:is([data-highlight-surface], [aria-label$=" profile preview"]) .badge-pill-root:not([data-thinking]) :is(.badge-pill-canvas, .badge-pill-cutout, .badge-pill-notch, .badge-pill-ink, .badge-pill-measure) {
+  display: none !important;
+}
+:is([data-highlight-surface], [aria-label$=" profile preview"]) .badge-pill-root:not([data-thinking]) .badge-motion-artwork {
+  mask: none !important;
+  -webkit-mask: none !important;
+  clip-path: none !important;
+}
+:is([data-highlight-surface], [aria-label$=" profile preview"]) .buzz-avatar-status-dot { display: none !important; }
+
 /* Every message picture is also the profile-card button; size the button
    and the picture inside it (not its container: in agent messages that
    container is the whole message). */
@@ -1260,13 +1274,9 @@ ${LOCKUP} > div:nth-child(2) {
   box-shadow: none !important;
 }
 ${LOCKUP} > div:nth-child(2) > *,
-${LOCKUP} > div:nth-child(2) :is(.buzz-avatar-status, .buzz-avatar, .buzz-avatar img, [data-avatar-fallback]) {
+${LOCKUP} > div:nth-child(2) :is(.agent-motion-avatar, .badge-pill-root, .badge-motion-artwork, .buzz-avatar-status, .buzz-avatar, .buzz-avatar img, [data-avatar-fallback]) {
   width: 100% !important;
   height: 100% !important;
-}
-/* Badges on agent pictures keep their own size. */
-${LOCKUP} > div:nth-child(2) :is(.buzz-avatar-status-dot, [class*="badge" i], [class*="indicator" i], [class*="status-dot" i]) {
-  display: none !important;
 }
 ${LOCKUP} > div:nth-child(2) :is(.buzz-avatar, .buzz-avatar img, [data-avatar-fallback]) {
   border-radius: 8px !important;
