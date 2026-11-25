@@ -819,9 +819,11 @@ ${PINNED_ORDER.map(
 ).join("\n")}
 
 /* Rows inside a sidebar section sit further right than its title, as in
-   Slack. Sections are <details> with the title in <summary>. */
-${SIDEBAR} details > summary ~ * {
-  padding-inline-start: ${SECTION_INDENT}px !important;
+   Slack. The title is a <details> and the rows sit in a sibling after it,
+   so the indent goes inside each row: the selected and hover colors still
+   run the full width, only the icon or picture and the name move over. */
+${SIDEBAR} [data-sidebar-section] [data-channel-sidebar-row] [data-variant="row"] {
+  padding-inline-start: calc(var(--space-2) + var(--space-half) + ${SECTION_INDENT}px) !important;
 }
 
 /* Slack's sizes, measured from its screenshots. */
@@ -1632,28 +1634,28 @@ ${SLACK_MENUS ? `
 .buzz-menu-popup {
   border-radius: 8px !important;
   corner-shape: round !important;
-  padding: 6px 0 !important;
-  min-width: 240px !important;
+  padding: 10px 0 !important;
+  min-width: 280px !important;
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--text-standard) 13%, transparent), 0 4px 12px rgba(0, 0, 0, 0.12) !important;
 }
 .buzz-menu-popup .buzz-menu-item {
   min-height: 28px !important;
   margin: 0 !important;
-  padding: 0 20px 0 14px !important;
+  padding: 0 24px 0 24px !important;
   border-radius: 0 !important;
   corner-shape: round !important;
   font-size: 15px !important;
 }
-.buzz-menu-popup .buzz-menu-item:is([data-highlighted], [data-popup-open], .slack-notify-option:hover):not([data-disabled]) {
+.buzz-menu-popup .buzz-menu-item:is([data-highlighted], [data-popup-open], .slack-notify-option:hover, .slack-dm-menu-item:hover):not([data-disabled]) {
   background: ${MENU_HIGHLIGHT} !important;
   color: #fff !important;
   --text-standard: #fff;
   --text-subtle: #fff;
   --text-metadata: #fff;
 }
-.buzz-menu-popup .buzz-menu-separator { margin: 6px 0 !important; }
+.buzz-menu-popup .buzz-menu-separator { margin: 8px 0 !important; }
 .buzz-menu-popup .buzz-menu-group-label {
-  padding: 4px 20px 2px 14px !important;
+  padding: 4px 24px 2px 24px !important;
   font-size: 13px !important;
   color: var(--text-subtle) !important;
 }
@@ -1662,7 +1664,7 @@ ${SLACK_MENUS ? `
    column, an icon, and Slack's blue for the current choice. */
 .slack-notify-option { cursor: default; display: flex; align-items: center; position: relative; }
 .slack-notify-check {
-  position: absolute; left: 0; top: 0; bottom: 0; width: 14px;
+  position: absolute; left: 6px; top: 0; bottom: 0; width: 14px;
   display: inline-flex; align-items: center; justify-content: center;
 }
 .slack-notify-check svg { width: 12px; height: 12px; }
@@ -1674,6 +1676,16 @@ ${SLACK_MENUS ? `
 .buzz-menu-popup .buzz-menu-item.slack-notify-option:hover,
 .buzz-menu-popup .buzz-menu-item.slack-notify-option:hover .slack-notify-icon { color: #fff !important; }
 .slack-notify-label { padding-top: 2px; }
+/* The 다이렉트 메시지 title's right-click menu, built by this plugin. */
+.slack-dm-menu {
+  position: fixed; z-index: 1000;
+  max-height: calc(100vh - 16px); overflow-y: auto;
+  background: var(--surface-popover, #fff);
+  color: var(--text-standard);
+  display: flex; flex-direction: column;
+}
+.slack-dm-menu .buzz-menu-item { display: flex; align-items: center; cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slack-dm-menu .slack-dm-menu-empty { color: var(--text-subtle); }
 
 /* @mentions in messages: Slack's light blue chip with blue text, and
    yellow when it mentions you (Buzz: a black pill). */
@@ -2903,6 +2915,17 @@ function addChannelNotifyMenu(ctx) {
     const mentionsOnly = () => (dm ? dmMentionsOnly.read(scope).has(channel.id) : !channelWanted(scope, channel));
     const state = () => (isMuted() ? "mute" : mentionsOnly() ? "mentions" : "all");
     const shown = options.filter((o) => !(dm && o.id === "mentions" && !group));
+    // In a DM, Slack's last choice also hides the conversation from the
+    // sidebar; it comes back from the 다이렉트 메시지 title's right-click menu.
+    const dmLabel = (o) =>
+      !dm ? o.label
+      : o.id === "all" ? t("모든 새 메시지", "All new messages")
+      : o.id === "mute" ? t("음소거 및 숨기기", "Mute and hide")
+      : o.label;
+    const closeItem = () =>
+      [...popup.querySelectorAll(".buzz-menu-item:not(.slack-notify-option)")].find((el) =>
+        /^(Close conversation|대화 닫기)$/.test(el.textContent.trim()),
+      );
 
     let box = popup.querySelector(".slack-notify-group");
     if (!box || box.dataset.channel !== channel.id) {
@@ -2919,7 +2942,7 @@ function addChannelNotifyMenu(ctx) {
             (o) =>
               `<div class="buzz-menu-item slack-notify-option" role="menuitemradio" tabindex="-1" data-option="${o.id}">` +
               `<span class="slack-notify-check" aria-hidden="true"></span>` +
-              `<span class="buzz-menu-icon slack-notify-icon" aria-hidden="true">${svg(o.icon)}</span>${dm && o.id === "all" ? t("모든 새 메시지", "All new messages") : o.label}</div>`,
+              `<span class="buzz-menu-icon slack-notify-icon" aria-hidden="true">${svg(o.icon)}</span>${dmLabel(o)}</div>`,
           )
           .join("") +
         `<div class="buzz-menu-separator" role="separator"></div>`;
@@ -2930,7 +2953,13 @@ function addChannelNotifyMenu(ctx) {
         event.stopPropagation();
         const muted = isMuted();
         if (option === "mute") {
+          // Both items are still on the page here; React closes the menu later.
+          const close = dm ? closeItem() : undefined;
           if (!muted) mute.click();
+          if (close) {
+            close.click();
+            return;
+          }
         } else {
           if (muted) mute.click();
           if (dm) dmMentionsOnly.set(scope, channel.id, option === "mentions");
@@ -2955,6 +2984,135 @@ function addChannelNotifyMenu(ctx) {
     return () => {
       observer.disconnect();
       document.querySelectorAll(".slack-notify-group").forEach((el) => el.remove());
+    };
+  });
+}
+
+// Right-clicking the 다이렉트 메시지 title opens Slack's section menu: start a
+// DM, and the conversations that are closed (hidden) or muted, so a closed DM
+// can be found again. Picking one opens it, and Buzz puts an opened DM back
+// in the sidebar.
+const DM_SECTION_MENU = true;
+const DM_MENU_LIMIT = 10;
+
+function dmSectionMenu(ctx) {
+  if (!DM_SECTION_MENU || !ctx.relay?.snapshot) return;
+  const relay = ctx.relay;
+  const esc = (text) => String(text).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
+
+  // Buzz keeps closed DMs on this computer under buzz-view.v1:[scope,"hidden-dms"].
+  const hiddenIds = (scope) => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(`buzz-view.v1:${JSON.stringify([scope, "hidden-dms"])}`) || "[]");
+      const list = Array.isArray(raw) ? raw : Array.isArray(raw?.value) ? raw.value : [];
+      return list.map((entry) => (typeof entry === "string" ? entry : entry?.id)).filter(Boolean);
+    } catch {
+      return [];
+    }
+  };
+
+  const titleOf = (channel, session, viewer) => {
+    if (channel.name) return channel.name;
+    const profiles = session.profiles?.snapshot?.();
+    const names = (channel.members ?? [])
+      .map((m) => (typeof m === "string" ? m : m?.pubkey))
+      .filter((key) => key && key !== viewer)
+      .map((key) => {
+        const p = profiles?.get?.(key);
+        return p?.displayName || p?.name || key.slice(0, 10);
+      });
+    return names.join(", ") || channel.id.slice(0, 10);
+  };
+
+  let open = null;
+  const close = () => {
+    open?.remove();
+    open = null;
+  };
+
+  const show = (x, y, section) => {
+    close();
+    const snap = relay.snapshot();
+    const session = snap?.status === "ready" ? snap.session : undefined;
+    if (!session) return false;
+    const scope = typeof session.scope === "string" ? session.scope : "";
+    const at = scope.lastIndexOf(":");
+    const viewer = at >= 0 ? scope.slice(at + 1) : "";
+    const dms = (session.channels?.list?.().channels ?? []).filter((c) => c.channelType === "dm");
+    const byId = new Map(dms.map((c) => [c.id, c]));
+    const hidden = hiddenIds(scope).filter((id) => byId.has(id));
+    const muted = (session.sidebarPreferences?.snapshot?.().data?.muted ?? []).filter((id) => byId.has(id));
+    const startButton = [...section.querySelectorAll("button")].find(
+      (b) => !b.closest("summary") && /new|start|message|메시지/i.test(b.getAttribute("aria-label") || b.title || ""),
+    );
+
+    const row = (id) =>
+      `<div class="buzz-menu-item slack-dm-menu-item" role="menuitem" tabindex="-1" data-channel="${esc(id)}">${esc(titleOf(byId.get(id), session, viewer))}</div>`;
+    const list = (label, ids, empty) =>
+      `<div class="buzz-menu-separator" role="separator"></div>` +
+      `<div class="buzz-menu-group-label">${label}</div>` +
+      (ids.length
+        ? ids.slice(0, DM_MENU_LIMIT).map(row).join("")
+        : `<div class="buzz-menu-item slack-dm-menu-empty" data-disabled="" aria-disabled="true">${empty}</div>`);
+
+    const menu = document.createElement("div");
+    menu.className = "buzz-menu-popup slack-dm-menu";
+    menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-label", t("다이렉트 메시지", "Direct messages"));
+    menu.innerHTML =
+      (startButton
+        ? `<div class="buzz-menu-item slack-dm-menu-item" role="menuitem" tabindex="-1" data-start="">${t("다이렉트 메시지 시작", "Start a direct message")}</div>`
+        : "") +
+      list(t("숨긴 대화", "Hidden conversations"), hidden, t("숨긴 대화가 없습니다", "No hidden conversations")) +
+      list(t("음소거된 대화", "Muted conversations"), muted, t("음소거된 대화가 없습니다", "No muted conversations"));
+    if (!startButton) menu.querySelector(".buzz-menu-separator")?.remove();
+
+    menu.addEventListener("click", (event) => {
+      const item = event.target.closest(".slack-dm-menu-item");
+      if (!item) return;
+      close();
+      if (item.hasAttribute("data-start")) startButton?.click();
+      else if (item.dataset.channel && at >= 0)
+        void ctx.navigation.open({
+          version: 1,
+          kind: "conversation",
+          scope: { communityOrigin: scope.slice(0, at), viewer: scope.slice(at + 1) },
+          channelId: item.dataset.channel,
+        });
+    });
+    document.body.append(menu);
+    const box = menu.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(x, innerWidth - box.width - 8))}px`;
+    menu.style.top = `${Math.max(8, Math.min(y, innerHeight - box.height - 8))}px`;
+    open = menu;
+    return true;
+  };
+
+  ctx.effect(() => {
+    const onContext = (event) => {
+      const summary = event.target.closest?.('[data-sidebar-section="dms"] details > summary');
+      if (!summary) return;
+      if (show(event.clientX, event.clientY, summary.closest("[data-sidebar-section]"))) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    const onDown = (event) => {
+      if (open && !open.contains(event.target)) close();
+    };
+    const onKey = (event) => {
+      if (event.key === "Escape") close();
+    };
+    document.addEventListener("contextmenu", onContext, true);
+    document.addEventListener("pointerdown", onDown, true);
+    document.addEventListener("keydown", onKey, true);
+    addEventListener("blur", close);
+    return () => {
+      document.removeEventListener("contextmenu", onContext, true);
+      document.removeEventListener("pointerdown", onDown, true);
+      document.removeEventListener("keydown", onKey, true);
+      removeEventListener("blur", close);
+      close();
     };
   });
 }
@@ -3889,6 +4047,7 @@ export function apply(ctx) {
   startChannelAlerts(ctx);
   addChannelNotifyMenu(ctx);
   groupDmMentionGate(ctx);
+  dmSectionMenu(ctx);
   addFormatBars(ctx);
   addDockNewButton(ctx);
   addChannelTabs(ctx);
