@@ -1695,7 +1695,14 @@ ${SLACK_MENUS ? `
 .slack-link-card-description { font-size: 14px; line-height: 20px; color: var(--text-standard); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .slack-link-card-site { display: flex; align-items: center; gap: 6px; font-size: 13px; line-height: 18px; color: var(--text-subtle); margin-top: 2px; }
 .slack-link-card-icon { width: 16px; height: 16px; border-radius: 3px; object-fit: contain; flex: none; }
-.slack-link-card-image { width: 120px; flex: none; object-fit: cover; border-left: 1px solid color-mix(in srgb, var(--text-standard) 8%, transparent); }
+.slack-link-card-image { width: 80px; height: 80px; margin: 12px 12px 12px 0; flex: none; object-fit: cover; border-radius: 6px; }
+/* A wide picture: under the text, whole, at most 360px wide (Slack's size). */
+.slack-link-card[data-wide-image] { flex-direction: column; }
+.slack-link-card[data-wide-image] .slack-link-card-image {
+  width: auto; height: auto; max-width: min(360px, calc(100% - 32px)); max-height: 240px;
+  margin: 0 16px 12px; object-fit: contain; align-self: flex-start;
+  border: 1px solid color-mix(in srgb, var(--text-standard) 8%, transparent);
+}
 /* The 다이렉트 메시지 title's right-click menu, built by this plugin. */
 /* It uses Buzz's own menu classes (buzz-menu-popup text-body-sm, as Buzz's
    menus do), so only the placement is set here. */
@@ -3442,6 +3449,17 @@ function linkPreviewCards(ctx) {
     if (!images.has(url)) images.set(url, readImage(url).catch(() => null).then((blob) => blob || url));
     return images.get(url);
   };
+  // A wide picture (most og:images are 1200×630) goes under the text at its
+  // own shape, as in Slack; a square-ish one stays a thumbnail on the right.
+  const shapeCard = (img) => {
+    const card = img.closest(".slack-link-card");
+    if (!card || !img.naturalWidth || !img.naturalHeight) return;
+    const wide = img.naturalWidth / img.naturalHeight > 1.3;
+    if ((card.dataset.wideImage !== undefined) !== wide) {
+      if (wide) card.dataset.wideImage = "";
+      else delete card.dataset.wideImage;
+    }
+  };
   const useAsync = (load, key) => {
     const [value, set] = React.useState(null);
     React.useEffect(() => {
@@ -3492,7 +3510,15 @@ function linkPreviewCards(ctx) {
             h("span", null, site),
           ),
       ),
-      picture && h("img", { className: "slack-link-card-image", src: picture, alt: preview.imageAlt || "" }),
+      picture &&
+        h("img", {
+          className: "slack-link-card-image",
+          src: picture,
+          alt: preview.imageAlt || "",
+          onLoad: (event) => shapeCard(event.currentTarget),
+          // Hidden, not removed: React still owns this element.
+          onError: (event) => { event.currentTarget.style.display = "none"; },
+        }),
     );
   }
 
@@ -3559,6 +3585,7 @@ function linkPreviewCards(ctx) {
         img.src = picture;
         img.alt = preview.imageAlt || "";
         img.addEventListener("error", () => img.remove());
+        img.addEventListener("load", () => shapeCard(img));
         card.append(img);
         card.dataset.hasImage = "";
       }
