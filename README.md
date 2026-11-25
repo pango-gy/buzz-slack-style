@@ -17,6 +17,19 @@ Buzz 데스크톱 앱을 슬랙처럼 보이고 쓰이게 바꾸는 플러그인
 
 ## 설치
 
+### 링크로 설치 (가장 쉬움)
+
+아래 링크를 복사(코드 칸 오른쪽 위 복사 버튼)해서 **Buzz 채팅창에 붙여넣고 누르거나**, 브라우저 주소창에 붙여넣으세요.
+Buzz가 열리고 플러그인 설치 화면이 뜨면 **Install plugin**을 누르면 됩니다. 링크를 여는 것만으로 설치되지는 않습니다.
+
+```
+buzz://plugin-install?repository=https%3A%2F%2Fgithub.com%2Fpango-gy%2Fbuzz-slack-style
+```
+
+팀 채널에 이 링크를 올려 고정해 두면 다들 한 번에 설치할 수 있습니다.
+
+### 직접 설치
+
 1. Buzz에서 **Settings → Plugins → Manage plugins**를 엽니다.
 2. **Add**를 누르고 **Add from Git**을 고릅니다.
 3. 아래 주소를 붙여넣고 추가합니다. Branch와 Folder는 비워 두면 됩니다.

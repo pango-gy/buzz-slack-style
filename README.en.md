@@ -17,6 +17,19 @@ A plugin that makes the Buzz desktop app look and feel like Slack.
 
 ## Install
 
+### With a link (easiest)
+
+Copy the link below (copy button at the top-right of the box) and **paste it into a Buzz chat and click it**, or paste it into your browser's address bar.
+Buzz opens the plugin install screen; click **Install plugin**. Opening the link alone installs nothing.
+
+```
+buzz://plugin-install?repository=https%3A%2F%2Fgithub.com%2Fpango-gy%2Fbuzz-slack-style
+```
+
+Pinning this link in a team channel lets everyone install it in one click.
+
+### Manual install
+
 1. In Buzz, open **Settings → Plugins → Manage plugins**.
 2. Click **Add** and choose **Add from Git**.
 3. Paste the address below and add it. Leave Branch and Folder empty.
