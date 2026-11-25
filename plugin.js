@@ -3274,6 +3274,99 @@ function dmSectionMenu(ctx) {
   });
 }
 
+// Cmd+Z (Ctrl+Z on Windows) in an empty message box right after sending
+// takes the message back, as in Slack: it is deleted and its text returns to
+// the box to edit and send again. It works for the last message sent from
+// that box, until you type or send something else there. Messages with files
+// are left alone, since the files cannot be put back.
+const UNDO_SEND = true;
+const UNDO_SEND_WINDOW_MS = 5 * 60 * 1000;
+
+function undoSend(ctx) {
+  const relay = ctx.relay;
+  if (!UNDO_SEND || !relay?.snapshot) return;
+  const EDITOR = '[data-composer-surface] [contenteditable="true"]';
+  let last = null;
+
+  const isEmpty = (editor) => !editor.textContent.trim() && !editor.querySelector("img, [data-mention-kind], [data-recipient-key]");
+  const selectedChannel = () =>
+    document.querySelector("[data-channel-sidebar-row][data-selected] button[data-channel-id]")?.getAttribute("data-channel-id");
+
+  // Paste the message's Markdown, as copying it from a message would: the
+  // box turns its @mention links back into chips.
+  const putBack = (editor, text) => {
+    editor.focus();
+    let handled = false;
+    try {
+      const data = new DataTransfer();
+      data.setData("text/plain", text);
+      const event = new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true });
+      editor.dispatchEvent(event);
+      handled = event.defaultPrevented;
+    } catch {}
+    if (!handled) document.execCommand("insertText", false, text);
+  };
+
+  ctx.effect(() => {
+    let stopSend;
+    let session;
+    const attach = () => {
+      const snap = relay.snapshot();
+      const next = snap?.status === "ready" ? snap.session : undefined;
+      if (next === session) return;
+      stopSend?.();
+      stopSend = undefined;
+      session = next;
+      last = null;
+      if (typeof session?.outbox?.observeSend !== "function") return;
+      stopSend = session.outbox.observeSend((event) => {
+        if (event?.kind !== 9) return undefined;
+        const surface = document.activeElement?.closest?.("[data-composer-surface]");
+        const editor = surface?.querySelector('[contenteditable="true"]');
+        const channelId = event.tags?.find?.(([name]) => name === "h")?.[1];
+        if (!editor || !channelId) return undefined;
+        const files = event.tags.some(([name]) => name === "imeta");
+        last = files ? null : { id: event.id, channelId, content: event.content, editor, at: Date.now(), thread: event.tags.some(([name]) => name === "e") };
+        return undefined;
+      });
+    };
+    const onKey = (event) => {
+      if (!last || event.key.toLowerCase() !== "z" || event.shiftKey || event.altKey) return;
+      if (!(event.metaKey || event.ctrlKey)) return;
+      const editor = event.target.closest?.(EDITOR);
+      if (!editor || editor !== last.editor || !editor.isConnected || !isEmpty(editor)) return;
+      if (Date.now() - last.at > UNDO_SEND_WINDOW_MS) return;
+      // The main box is reused across conversations; only undo in the one it was sent to.
+      if (!last.thread && selectedChannel() && selectedChannel() !== last.channelId) return;
+      if (typeof session?.messages?.remove !== "function") return;
+      event.preventDefault();
+      event.stopPropagation();
+      const taken = last;
+      last = null;
+      try {
+        session.messages.remove([taken.id]);
+      } catch {
+        return;
+      }
+      putBack(editor, taken.content || "");
+    };
+    // Typing or sending something else ends the chance to undo.
+    const onInput = (event) => {
+      if (last && event.target.closest?.(EDITOR) === last.editor && !isEmpty(last.editor)) last = null;
+    };
+    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("input", onInput, true);
+    const stopRelay = relay.subscribe?.(attach);
+    attach();
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("input", onInput, true);
+      stopRelay?.();
+      stopSend?.();
+    };
+  });
+}
+
 // Link previews: a Slack-style card under a message for each web link, with
 // the page's title, description, site name and picture. Buzz 1.0.6 has no
 // card for ordinary web links. Buzz itself reads the page (host.readPage,
@@ -4345,6 +4438,7 @@ export function apply(ctx) {
   hiddenDmRows(ctx);
   dmSectionMenu(ctx);
   linkPreviewCards(ctx);
+  undoSend(ctx);
   addFormatBars(ctx);
   addDockNewButton(ctx);
   addChannelTabs(ctx);
