@@ -50,6 +50,7 @@ Click **Disable** under **Manage plugins → Slack Style** and Buzz returns to i
 - **Settings → Notifications → 채널 메시지** turns these alerts on or off and sets their sound.
 - Per channel, right-click it and use **다음에 대해 알림… (Notify me about…)**: **All new posts** (channel alerts on) / **Mentions only** (channel alerts off) / **Mute** (Buzz's mute). The choice is saved on each person's own computer. These items can't be reached with the arrow keys.
 - People who have not picked yet get the default from `CHANNEL_ALERTS.channels` in `plugin.js` (`"all"` or a list of channel names).
+- Buzz has no broadcast mention like `@here`/`@channel`, so this plugin alerts for messages containing `@here`, `@channel` or `@everyone` — even in channels set to Mentions only, but not in muted ones. Only people with the plugin get these alerts.
 - Only the community that is currently open can alert.
 - This relies on Buzz's internal live message feed, which is not a documented plugin API. If a Buzz update changes it, channel alerts stop; nothing else is affected.
 

@@ -1143,6 +1143,70 @@ ${POP} [role="option"][aria-selected="true"] {
 ${POP} [role="option"][aria-selected="true"] small { color: #fff !important; }`;
 })()}
 
+/* Mention picker opened from the @ button: the same flat Slack list as the
+   @ suggestions (32px rows, 20px rounded pictures, bold name with its detail
+   on one line, blue selected row) under one rounded search box. */
+${(() => {
+  const PICK = '[aria-label="Mention a member or agent"]';
+  const ROW = `${PICK} [data-mention-choice]`;
+  return `${PICK} {
+  border-radius: 8px !important;
+  corner-shape: round !important;
+}
+${PICK} .search-field {
+  height: 36px !important;
+  border-radius: 8px !important;
+  corner-shape: round !important;
+  border: 1px solid color-mix(in srgb, var(--text-standard) 30%, transparent) !important;
+}
+${PICK} .search-field:has(input:focus) {
+  border-color: #1264A3 !important;
+  box-shadow: 0 0 0 3px rgba(29, 155, 209, 0.3) !important;
+}
+${PICK} .search-field input { font-size: 15px !important; }
+${ROW} {
+  min-height: 32px !important;
+  height: auto !important;
+  padding: 2px 16px !important;
+  gap: 8px !important;
+  border-radius: 0 !important;
+  corner-shape: round !important;
+  font-size: 15px !important;
+}
+${ROW} :is(.buzz-avatar-status, .buzz-avatar, .buzz-avatar img) {
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 0 !important;
+}
+${ROW} .buzz-avatar,
+${ROW} .buzz-avatar :is(img, [data-avatar-fallback]) {
+  border-radius: 4px !important;
+  corner-shape: round !important;
+}
+${ROW} [data-avatar-fallback] { font-size: 11px !important; }
+${ROW} .flex-col {
+  flex-direction: row !important;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap !important;
+  overflow: hidden;
+}
+${ROW} .flex-col > :first-child { font-weight: 700; flex: none; }
+${ROW} .flex-col small {
+  font-size: 15px !important;
+  line-height: inherit !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+${ROW}:is([data-selected], [data-highlighted], [aria-selected="true"], :hover):not([disabled]) {
+  background: ${MENTION_SELECTED} !important;
+  color: #fff !important;
+  --text-standard: #fff;
+  --text-subtle: #fff;
+}
+${ROW}:is([data-selected], [data-highlighted], [aria-selected="true"], :hover) small { color: #fff !important; }`;
+})()}
+
 ${CHANNEL_TABS ? `/* Tab row under the channel name (added by addChannelTabs), placed right
    after the header; the dividing line moves below the row. */
 .panel-header:has(+ .slack-channel-tabs) { border-block-end-color: transparent !important; }
@@ -1459,6 +1523,7 @@ const TRANSLATIONS = LANG === "en" ? {} : {
   "New messages": t("새 항목", "New messages"),
   Today: t("오늘", "Today"),
   Yesterday: t("어제", "Yesterday"),
+  "Add emoji": "이모티콘 추가",
   // Channel right-click menu.
   "Move to…": "이동…",
   "Move to...": "이동…",
@@ -1478,6 +1543,7 @@ const TRANSLATIONS = LANG === "en" ? {} : {
   "Remove message": "메시지 삭제",
 };
 const TRANSLATION_PATTERNS = LANG === "en" ? [] : [
+  [/^Managed by (.+)$/, "$1 님이 관리"],
   [/^(\d+) repl(?:y|ies)$/, "답글 $1개"],
   [/^Last reply (.+)$/, "마지막 답글 $1"],
   [/^Remove from (.+)$/, "$1에서 제거"],
@@ -1545,9 +1611,19 @@ function translateMenuItems(root) {
   }
 }
 
+function translatePlaceholders(root) {
+  const inputs = root.matches?.("input[placeholder]") ? [root] : [...(root.querySelectorAll?.("input[placeholder]") ?? [])];
+  for (const input of inputs) {
+    const value = input.getAttribute("placeholder");
+    const next = value && translated(value);
+    if (next && next !== value) input.setAttribute("placeholder", next);
+  }
+}
+
 function translateTree(root) {
   if (root.nodeType === Node.TEXT_NODE) return translateText(root);
   if (root.nodeType !== Node.ELEMENT_NODE) return;
+  if (LANG !== "en") translatePlaceholders(root);
   // A message row as a whole is skipped, except its thread summary.
   if (root.closest?.(SKIP_TEXT) && !root.closest?.(TRANSLATE_INSIDE)) {
     root.querySelectorAll?.(TRANSLATE_INSIDE).forEach((summary) => translateTree(summary));
@@ -2350,6 +2426,9 @@ function registerAlertSettings(ctx) {
   cards.register({ id: "channel-alerts", title: t("채널 메시지 알림", "Channel message alerts"), component: ChannelAlertSettings });
 }
 
+// Alert for @here / @channel / @everyone in any channel that isn't muted.
+const BROADCAST_MENTIONS = true;
+
 // Each person's channel choice, saved on this computer per community and
 // account: { mode: "all" | "selected", ids: [channelId, ...] }.
 const alertChoice = {
@@ -2557,7 +2636,11 @@ function startChannelAlerts(ctx) {
     const decide = (owned, viewer, message) => {
       const channel = owned.channels?.list?.().channels?.find((c) => c.id === message.channelId);
       if (!channel || channel.huddle || channel.channelType === "dm" || channel.channelType === "solo") return false;
-      if (!channelWanted(owned.scope, channel)) return false;
+      // @here / @channel / @everyone: Buzz has no broadcast mention, so the
+      // plugin treats these words as one. They alert even in channels set to
+      // "멘션만" (but not muted ones, checked below).
+      const broadcast = BROADCAST_MENTIONS && /(^|[\s(])@(here|channel|everyone)(?=$|[\s.,!?)])/i.test(message.previewContent || "");
+      if (!broadcast && !channelWanted(owned.scope, channel)) return false;
       const prefs = owned.sidebarPreferences?.snapshot?.();
       if (prefs?.data?.muted?.includes?.(message.channelId)) return false;
       const attention = owned.unread?.attention?.(message.channelId, message.messageId);
@@ -2826,7 +2909,118 @@ function registerLanguageSettings(ctx) {
   cards.register({ id: "language", title: "Slack Style", component: LanguageSettings });
 }
 
+// ---------------------------------------------------------------------------
+// Emoji picker like Slack's. Buzz uses Emoji Mart, which draws inside its own
+// shadow root, so page styles can't reach it: a stylesheet is added inside
+// each picker, and its category names are translated there too.
+const SLACK_EMOJI_PICKER = true;
+const EMOJI_TRANSLATIONS = {
+  "Frequently used": "자주 사용됨",
+  "Smileys & People": "표정 및 사람",
+  "Smileys & Emotion": "표정 및 감정",
+  "People & Body": "사람 및 신체",
+  "Animals & Nature": "동물 및 자연",
+  "Food & Drink": "음식 및 음료",
+  Activity: "활동",
+  "Travel & Places": "여행 및 장소",
+  Objects: "사물",
+  Symbols: "기호",
+  Flags: "깃발",
+  Custom: "사용자 지정",
+  "Search results": "검색 결과",
+  Search: "모든 이모티콘 검색",
+  "Search emoji": "모든 이모티콘 검색",
+  "Search emojis": "모든 이모티콘 검색",
+};
+
+function emojiPickerCss() {
+  return `
+    /* Category tabs on top, as in Slack, with a rounded-square selection. */
+    #nav { order: -1; border-bottom: 1px solid color-mix(in srgb, var(--text-standard) 12%, transparent); height: 44px !important; }
+    #nav .bar { display: none !important; }
+    #nav button::before { border-radius: 6px !important; width: 32px !important; height: 32px !important; }
+    #nav button:hover::before { background: color-mix(in srgb, var(--text-standard) 8%, transparent) !important; }
+    #nav button[aria-selected]::before { background: color-mix(in srgb, var(--text-standard) 12%, transparent) !important; }
+    /* Search: Buzz draws the box on .search-field around the input. Make
+       that one box Slack's rounded rectangle, blue while typing; the input
+       itself stays borderless. */
+    .search-field {
+      height: 36px !important;
+      border-radius: 8px !important;
+      border: 1px solid color-mix(in srgb, var(--text-standard) 30%, transparent) !important;
+    }
+    .search-field:has(input:focus) {
+      border-color: #1264A3 !important;
+      box-shadow: 0 0 0 3px rgba(29, 155, 209, 0.3) !important;
+    }
+    .search-field input[type="search"] {
+      border: 0 !important;
+      box-shadow: none !important;
+      outline: none !important;
+      background: transparent !important;
+      font-size: 15px !important;
+    }
+    /* Bold section titles; rounded-square hover on emoji. */
+    .category .sticky {
+      font-size: 15px !important;
+      font-weight: 700 !important;
+      color: var(--text-standard) !important;
+    }
+    .category button .background, .category button:hover .background { border-radius: 6px !important; }
+  `;
+}
+
+function enhanceEmojiPickers(ctx) {
+  if (!SLACK_EMOJI_PICKER) return;
+  const ko = LANG !== "en";
+  const fix = (root) => {
+    // Text, tooltips and the search placeholder; each write only when it
+    // changes, since this runs from a MutationObserver.
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const text = n.nodeValue.trim();
+      if (Object.hasOwn(EMOJI_TRANSLATIONS, text)) n.nodeValue = n.nodeValue.replace(text, EMOJI_TRANSLATIONS[text]);
+    }
+    root.querySelectorAll("[title], [aria-label], input[placeholder]").forEach((el) => {
+      for (const attr of ["title", "aria-label", "placeholder"]) {
+        const value = el.getAttribute(attr);
+        if (value && Object.hasOwn(EMOJI_TRANSLATIONS, value)) el.setAttribute(attr, EMOJI_TRANSLATIONS[value]);
+      }
+    });
+  };
+  const watched = new WeakSet();
+  const observers = [];
+  const attach = (picker) => {
+    const root = picker.shadowRoot;
+    if (!root || watched.has(root)) return;
+    watched.add(root);
+    const style = document.createElement("style");
+    style.dataset.plugin = "team.slack-sidebar";
+    style.textContent = emojiPickerCss();
+    root.appendChild(style);
+    if (!ko) return;
+    fix(root);
+    const observer = new MutationObserver(() => fix(root));
+    observer.observe(root, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["title", "aria-label", "placeholder"] });
+    observers.push(observer);
+  };
+  ctx.effect(() => {
+    const scan = () => document.querySelectorAll("em-emoji-picker").forEach(attach);
+    const observer = new MutationObserver(scan);
+    observer.observe(document.body, { childList: true, subtree: true });
+    scan();
+    return () => {
+      observer.disconnect();
+      observers.forEach((o) => o.disconnect());
+      document.querySelectorAll("em-emoji-picker").forEach((p) =>
+        p.shadowRoot?.querySelectorAll('style[data-plugin="team.slack-sidebar"]').forEach((el) => el.remove()),
+      );
+    };
+  });
+}
+
 export function apply(ctx) {
+  enhanceEmojiPickers(ctx);
   switchTheme(savedTheme());
   registerLanguageSettings(ctx);
   startChannelAlerts(ctx);
