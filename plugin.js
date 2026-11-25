@@ -3130,8 +3130,8 @@ function hiddenDmRows(ctx) {
 }
 
 // Right-clicking the 다이렉트 메시지 title opens Slack's section menu: start a
-// DM, the hidden conversations and the muted ones (a DM that is both is
-// listed once, under muted). Picking one opens it; a hidden DM shows in the
+// DM and the hidden conversations ("음소거 및 숨기기" or "대화 닫기"), muted
+// or not, in one list. Picking one opens it; a hidden DM shows in the
 // sidebar only while it is open.
 const DM_SECTION_MENU = true;
 const DM_MENU_LIMIT = 10;
@@ -3157,9 +3157,7 @@ function dmSectionMenu(ctx) {
     const dms = (session.channels?.list?.().channels ?? []).filter((c) => c.channelType === "dm");
     const byId = new Map(dms.map((c) => [c.id, c]));
     const buzzHidden = new Set(buzzHiddenDmIds(scope));
-    const muted = (session.sidebarPreferences?.snapshot?.().data?.muted ?? []).filter((id) => byId.has(id));
-    const mutedSet = new Set(muted);
-    const hidden = [...new Set([...slackHiddenDms.read(scope), ...buzzHidden])].filter((id) => byId.has(id) && !mutedSet.has(id));
+    const hidden = [...new Set([...slackHiddenDms.read(scope), ...buzzHidden])].filter((id) => byId.has(id));
     const startButton = [...section.querySelectorAll("button")].find(
       (b) => !b.closest("summary") && /new|start|message|메시지/i.test(b.getAttribute("aria-label") || b.title || ""),
     );
@@ -3181,12 +3179,11 @@ function dmSectionMenu(ctx) {
       (startButton
         ? `<div class="buzz-menu-item slack-dm-menu-item" role="menuitem" tabindex="-1" data-start="">${t("다이렉트 메시지 시작", "Start a direct message")}</div>`
         : "") +
-      list(t("숨긴 대화", "Hidden conversations"), hidden, t("숨긴 대화가 없습니다", "No hidden conversations")) +
-      list(t("음소거된 대화", "Muted conversations"), muted, t("음소거된 대화가 없습니다", "No muted conversations"));
+      list(t("숨긴 대화", "Hidden conversations"), hidden, t("숨긴 대화가 없습니다", "No hidden conversations"));
     if (!startButton) menu.querySelector(".buzz-menu-separator")?.remove();
 
     // Names of people not loaded yet fill in once their profiles arrive.
-    const shownIds = [...hidden.slice(0, DM_MENU_LIMIT), ...muted.slice(0, DM_MENU_LIMIT)];
+    const shownIds = hidden.slice(0, DM_MENU_LIMIT);
     const missing = [...new Set(shownIds.flatMap((id) => byId.get(id)?.participants ?? []))].filter(
       (key) => !session.profiles?.snapshot?.().get?.(key),
     );
