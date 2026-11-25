@@ -2302,10 +2302,23 @@ function registerLanguageSettings(ctx) {
   if (!cards?.register) return;
   const React = ctx.react;
   const h = React.createElement;
+
+  const PEN = "M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z";
+  const sectionTitle = (text) => h("h3", { style: { margin: 0, fontSize: "15px", fontWeight: 700 } }, text);
+  const hint = (text) => h("p", { style: { margin: 0, fontSize: "13px", color: "var(--text-subtle)" } }, text);
+
   function LanguageSettings() {
     const [choice, setChoice] = React.useState(() => savedLanguage() ?? "auto");
     const [theme, setTheme] = React.useState(savedTheme);
     const [custom, setCustom] = React.useState(savedCustomColor);
+
+    const pickTheme = (id) => {
+      setTheme(id);
+      try {
+        localStorage.setItem(THEME_KEY, id);
+      } catch {}
+      switchTheme(id);
+    };
     const pickCustom = (color) => {
       if (!/^#[0-9a-f]{6}$/i.test(color)) return;
       setCustom(color);
@@ -2315,84 +2328,139 @@ function registerLanguageSettings(ctx) {
       THEMES.custom = customTheme(color);
       pickTheme("custom");
     };
-    const pickTheme = (id) => {
-      setTheme(id);
-      try {
-        localStorage.setItem(THEME_KEY, id);
-      } catch {}
-      switchTheme(id);
-    };
-    const swatch = (id) => {
-      const colors = { ...BASE_COLORS, ...THEMES[id] };
-      const active = theme === id;
-      return h(
-        "button",
-        {
-          key: id,
-          type: "button",
-          title: THEMES[id].name,
-          "aria-pressed": active,
-          onClick: () => pickTheme(id),
-          style: {
-            display: "flex", flexDirection: "column", alignItems: "center", gap: "6px",
-            padding: "8px", border: active ? "2px solid var(--text-standard)" : "2px solid transparent",
-            borderRadius: "10px", background: "transparent", cursor: "pointer", color: "inherit",
-          },
-        },
-        h("span", {
-          "aria-hidden": "true",
-          style: {
-            display: "flex", width: "64px", height: "40px", borderRadius: "6px", overflow: "hidden",
-            boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.12)",
-          },
-        },
-          h("span", { style: { width: "16px", background: colors.chrome } }),
-          h("span", { style: { flex: 1, background: colors.sidebar, display: "flex", alignItems: "center", padding: "0 6px" } },
-            h("span", { style: { flex: 1, height: "8px", borderRadius: "3px", background: colors.selected } }))),
-        h("span", { style: { fontSize: "12px" } }, THEMES[id].name),
-      );
-    };
-    const pick = (next) => {
+    const pickLanguage = (next) => {
       setChoice(next);
       try {
         if (next === "auto") localStorage.removeItem(LANGUAGE_KEY);
         else localStorage.setItem(LANGUAGE_KEY, next);
       } catch {}
     };
-    const changed = (choice === "auto" ? pickAutoLanguage() : choice) !== LANG;
-    const row = { display: "flex", alignItems: "center", gap: "var(--space-2)", padding: "4px 0", cursor: "pointer" };
-    const option = (value, label) =>
-      h("label", { key: value, style: row },
-        h("input", { type: "radio", name: "slack-style-language", checked: choice === value, onChange: () => pick(value) }),
+    const needsReload = (choice === "auto" ? pickAutoLanguage() : choice) !== LANG;
+
+    // Mini preview of a theme: left bar, sidebar and a selected row.
+    const preview = (colors) =>
+      h("span", {
+        "aria-hidden": "true",
+        style: { display: "flex", width: "100%", height: "100%", borderRadius: "7px", overflow: "hidden" },
+      },
+        h("span", { style: { width: "26%", background: colors.chrome } }),
+        h("span", {
+          style: { flex: 1, background: colors.sidebar, display: "flex", flexDirection: "column", justifyContent: "center", gap: "4px", padding: "0 7px" },
+        },
+          h("span", { style: { height: "5px", width: "70%", borderRadius: "2px", background: colors.text, opacity: 0.55 } }),
+          h("span", { style: { height: "7px", borderRadius: "2px", background: colors.selected } }),
+          h("span", { style: { height: "5px", width: "55%", borderRadius: "2px", background: colors.text, opacity: 0.55 } })));
+
+    const tile = (id) => {
+      const colors = { ...BASE_COLORS, ...THEMES[id] };
+      const active = theme === id;
+      const isCustom = id === "custom";
+      const frame = {
+        position: "relative", display: "block", width: "76px", height: "50px", borderRadius: "10px", padding: "3px",
+        boxShadow: active ? "0 0 0 2px var(--text-standard)" : "0 0 0 1px color-mix(in srgb, var(--text-standard) 14%, transparent)",
+        cursor: "pointer",
+      };
+      const label = h("span", {
+        style: { fontSize: "12px", fontWeight: active ? 700 : 400, color: active ? "var(--text-standard)" : "var(--text-subtle)" },
+      }, THEMES[id].name);
+      const wrap = { display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" };
+      if (!isCustom) {
+        return h("button", {
+          key: id, type: "button", "aria-pressed": active, title: THEMES[id].name, onClick: () => pickTheme(id),
+          style: { ...wrap, border: 0, padding: 0, background: "transparent", color: "inherit", cursor: "pointer" },
+        }, h("span", { style: frame }, preview(colors)), label);
+      }
+      // The custom tile is the color picker itself: clicking it opens the
+      // system color panel, and every change applies at once.
+      return h("label", { key: id, title: THEMES[id].name, style: { ...wrap, cursor: "pointer" } },
+        h("span", { style: frame },
+          active
+            ? preview(colors)
+            : h("span", {
+                "aria-hidden": "true",
+                style: {
+                  display: "block", width: "100%", height: "100%", borderRadius: "7px",
+                  background: "conic-gradient(from 200deg, #e0457b, #f2a33a, #f2d94e, #4cc38a, #3fa7e0, #7a5af0, #e0457b)",
+                },
+              }),
+          h("span", {
+            "aria-hidden": "true",
+            style: {
+              position: "absolute", right: "-6px", bottom: "-6px", width: "22px", height: "22px", borderRadius: "50%",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              background: "var(--surface-panel, #fff)", color: "var(--text-standard)",
+              boxShadow: "0 0 0 1px color-mix(in srgb, var(--text-standard) 18%, transparent), 0 1px 3px rgba(0,0,0,0.15)",
+            },
+          }, h("svg", { width: 12, height: 12, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2.2, strokeLinecap: "round", strokeLinejoin: "round" },
+            h("path", { d: PEN }))),
+          h("input", {
+            type: "color",
+            value: custom,
+            "aria-label": THEMES[id].name,
+            onClick: () => theme !== "custom" && pickTheme("custom"),
+            onInput: (e) => pickCustom(e.target.value),
+            onChange: (e) => pickCustom(e.target.value),
+            style: { position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, cursor: "pointer", border: 0, padding: 0 },
+          })),
         label);
+    };
+
+    const segment = (value, text) => {
+      const active = choice === value;
+      return h("button", {
+        key: value, type: "button", "aria-pressed": active, onClick: () => pickLanguage(value),
+        style: {
+          border: 0, borderRadius: "6px", padding: "6px 14px", fontSize: "13px", cursor: "pointer",
+          fontWeight: active ? 700 : 400,
+          background: active ? "var(--surface-panel, #fff)" : "transparent",
+          color: active ? "var(--text-standard)" : "var(--text-subtle)",
+          boxShadow: active ? "0 1px 2px rgba(0,0,0,0.12), 0 0 0 1px color-mix(in srgb, var(--text-standard) 10%, transparent)" : "none",
+        },
+      }, text);
+    };
+
     return h(
       "section",
-      { style: { display: "flex", flexDirection: "column", gap: "var(--space-3)", padding: "var(--space-panel-inset)" } },
-      h("h2", null, "Slack Style"),
-      h("p", { style: { color: "var(--text-subtle)" } },
-        "언어 · Language: 플러그인 메뉴와 Buzz 메뉴 이름을 한국어로 바꿀지 고릅니다. / Choose whether this plugin's labels and Buzz's menu names are shown in Korean or English."),
-      option("ko", "한국어"),
-      option("en", "English"),
-      option("auto", "자동 · Automatic (computer language)"),
-      h("h3", { style: { marginTop: "var(--space-3)" } }, t("색상", "Color")),
-      h("div", { style: { display: "flex", flexWrap: "wrap", gap: "var(--space-2)" } }, Object.keys(THEMES).map(swatch)),
-      h(
-        "label",
-        { style: { display: "flex", alignItems: "center", gap: "var(--space-2)", cursor: "pointer" } },
-        h("input", {
-          type: "color",
-          value: custom,
-          onInput: (e) => pickCustom(e.target.value),
-          onChange: (e) => pickCustom(e.target.value),
-          style: { width: "40px", height: "28px", padding: 0, border: "none", background: "transparent", cursor: "pointer" },
-        }),
-        h("span", null, t("직접 고르기: 사이드바 색을 고르면 나머지 색이 맞춰집니다. 너무 밝은 색은 글자가 보이도록 어둡게 조정됩니다.", "Custom: pick a sidebar color and the other colors follow. Very light colors are darkened so text stays readable.")),
-      ),
-      changed
-        ? h("div", { style: { display: "flex", alignItems: "center", gap: "var(--space-3)" } },
-            h("p", null, "적용하려면 Buzz 화면을 다시 불러옵니다. / Reload the Buzz window to apply."),
-            h("button", { type: "button", onClick: () => window.location.reload() }, "다시 불러오기 · Reload"))
-        : null,
+      { style: { display: "flex", flexDirection: "column", gap: "28px", padding: "var(--space-panel-inset)", maxWidth: "640px" } },
+      h("div", { style: { display: "flex", flexDirection: "column", gap: "4px" } },
+        h("h2", { style: { margin: 0 } }, "Slack Style"),
+        hint(t("Buzz를 슬랙처럼 보이게 하는 설정입니다. 이 컴퓨터에만 저장됩니다.", "Settings for the Slack-like look. Saved on this computer only."))),
+
+      h("div", { style: { display: "flex", flexDirection: "column", gap: "12px" } },
+        sectionTitle(t("색상", "Color")),
+        hint(t("사이드바와 위·왼쪽 막대 색입니다. 다크 모드에서는 자동으로 더 어두워집니다.", "Colors of the sidebar and the top and left bars. They get darker automatically in dark mode.")),
+        h("div", { style: { display: "flex", flexWrap: "wrap", gap: "18px 14px", paddingTop: "4px" } }, Object.keys(THEMES).map(tile))),
+
+      h("div", { style: { display: "flex", flexDirection: "column", gap: "12px" } },
+        sectionTitle(t("언어 · Language", "Language · 언어")),
+        hint(t("플러그인이 추가한 메뉴와 Buzz 메뉴 이름을 표시할 언어입니다.", "Language of this plugin's labels and of Buzz's menu names.")),
+        h("div", {
+          role: "group",
+          style: {
+            display: "inline-flex", alignSelf: "flex-start", gap: "2px", padding: "3px", borderRadius: "8px",
+            background: "color-mix(in srgb, var(--text-standard) 7%, transparent)",
+          },
+        },
+          segment("ko", "한국어"),
+          segment("en", "English"),
+          segment("auto", t("시스템 언어", "System"))),
+        needsReload
+          ? h("div", {
+              style: {
+                display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px",
+                padding: "10px 12px", borderRadius: "8px", fontSize: "13px",
+                background: "color-mix(in srgb, var(--text-standard) 5%, transparent)",
+              },
+            },
+              h("span", null, t("Buzz 화면을 다시 불러오면 적용됩니다.", "Reload the Buzz window to apply.")),
+              h("button", {
+                type: "button", onClick: () => window.location.reload(),
+                style: {
+                  border: 0, borderRadius: "6px", padding: "6px 12px", fontSize: "13px", fontWeight: 700, cursor: "pointer",
+                  background: "var(--text-standard)", color: "var(--surface-panel, #fff)",
+                },
+              }, t("다시 불러오기", "Reload")))
+          : null),
     );
   }
   cards.register({ id: "language", title: "Slack Style", component: LanguageSettings });
