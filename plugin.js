@@ -888,15 +888,9 @@ ${SIDEBAR} details > summary :not(svg, svg *) {
   height: ${SIZES.messageAvatar}px !important;
   min-width: 0 !important;
 }
-/* In Compact density the picture sits elsewhere; every message picture is
-   the profile-card trigger button, so size that button, its box and the
-   picture inside it directly. */
-[data-highlight-surface] :has(> [data-preview-card-trigger]):not([data-thread-summary] *) {
-  flex: 0 0 ${SIZES.messageAvatar}px !important;
-  width: ${SIZES.messageAvatar}px !important;
-  min-width: ${SIZES.messageAvatar}px !important;
-  height: auto !important;
-}
+/* Every message picture is also the profile-card button; size the button
+   and the picture inside it (not its container: in agent messages that
+   container is the whole message). */
 [data-highlight-surface] [data-preview-card-trigger]:not([data-thread-summary] *),
 [data-highlight-surface] [data-preview-card-trigger]:not([data-thread-summary] *) :is(.buzz-avatar-status, .buzz-avatar, .buzz-avatar img) {
   width: ${SIZES.messageAvatar}px !important;
@@ -1265,7 +1259,15 @@ ${LOCKUP} > div:nth-child(2) {
   background: none !important;
   box-shadow: none !important;
 }
-${LOCKUP} > div:nth-child(2) * { width: 100% !important; height: 100% !important; }
+${LOCKUP} > div:nth-child(2) > *,
+${LOCKUP} > div:nth-child(2) :is(.buzz-avatar-status, .buzz-avatar, .buzz-avatar img, [data-avatar-fallback]) {
+  width: 100% !important;
+  height: 100% !important;
+}
+/* Badges on agent pictures keep their own size. */
+${LOCKUP} > div:nth-child(2) :is(.buzz-avatar-status-dot, [class*="badge" i], [class*="indicator" i], [class*="status-dot" i]) {
+  display: none !important;
+}
 ${LOCKUP} > div:nth-child(2) :is(.buzz-avatar, .buzz-avatar img, [data-avatar-fallback]) {
   border-radius: 8px !important;
   corner-shape: round !important;
