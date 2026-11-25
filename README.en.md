@@ -12,6 +12,7 @@ A plugin that makes the Buzz desktop app look and feel like Slack.
 - A formatting bar (bold, italic, link, lists…) across the top of the message box, and Slack-style placeholder text ("#채널에 메시지 보내기")
 - A tab row under the channel name: **Messages · Files · Canvas**, with a list of the channel's files
 - **Alerts for every new channel message**, like Slack's "All new messages" (Buzz alone only alerts for mentions, DMs and thread replies)
+- Profile card: hovering a picture or a name opens a Slack-style card above it (large picture and name, local time, Profile/Message buttons)
 - Finer details: the message hover toolbar, selected channel rows, date dividers, the new-messages line, code blocks and more
 
 ## Install

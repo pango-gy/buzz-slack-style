@@ -1161,6 +1161,133 @@ ${POP} [role="option"][aria-selected="true"] small { color: #fff !important; }`;
   background-color: ${MENTION_CHIP.selfBg};
 }
 
+/* Profile card (hovering a picture or a name in a message), like Slack's:
+   no color backdrop; a large rounded-square picture beside the name and
+   local time; bordered buttons with their words below. Buzz's card is
+   [aria-label="<name> profile preview"] > content > lockup + actions. */
+${(() => {
+  const CARD = '[aria-label$=" profile preview"]';
+  // Real structure (from the diagnostic): card > content > [lockup > backdrop,
+  // artwork > portrait, identity > name, local time p, time zone p], actions.
+  // content becomes a grid and lockup/identity are flattened into it.
+  const CONTENT = `${CARD} > div:first-child`;
+  const LOCKUP = `${CONTENT} > div:first-child`;
+  const IDENTITY = `${LOCKUP} > div:nth-child(3)`;
+  const CLOCK = "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2";
+  const clock = `url("data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${CLOCK}"/></svg>`)}")`;
+  return `.buzz-preview-card-positioner[data-slack-card]:has(${CARD}) {
+  position: fixed !important;
+  top: var(--slack-card-top) !important;
+  left: var(--slack-card-left) !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+}
+${CARD} {
+  width: 340px !important;
+  max-width: 340px !important;
+  border-radius: 8px !important;
+  corner-shape: round !important;
+  padding: 0 !important;
+}
+${CONTENT} {
+  display: grid !important;
+  grid-template-columns: 96px 1fr;
+  column-gap: 14px;
+  row-gap: 0;
+  align-items: center;
+  padding: 16px !important;
+}
+${LOCKUP}, ${IDENTITY} { display: contents !important; }
+${LOCKUP} > div:first-child { display: none !important; }
+${LOCKUP} > div:nth-child(2) {
+  grid-column: 1;
+  grid-row: 1;
+  position: static !important;
+  width: 96px !important;
+  height: 96px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: none !important;
+  background: none !important;
+  box-shadow: none !important;
+}
+${LOCKUP} > div:nth-child(2) * { width: 100% !important; height: 100% !important; }
+${LOCKUP} > div:nth-child(2) :is(.buzz-avatar, .buzz-avatar img, [data-avatar-fallback]) {
+  border-radius: 8px !important;
+  corner-shape: round !important;
+  mask: none !important;
+}
+${LOCKUP} > div:nth-child(2) .buzz-avatar-status-dot { display: none !important; }
+/* Name beside the picture, bold, left-aligned. */
+${IDENTITY} > div:first-child {
+  grid-column: 2;
+  grid-row: 1;
+  justify-content: flex-start !important;
+  text-align: left !important;
+  font-size: 18px !important;
+  font-weight: 800 !important;
+  margin: 0 !important;
+}
+/* Your own card has no Message button: name it "(나)", as Slack does. */
+${CARD}:not(:has([data-profile-action="message"])) ${IDENTITY} > div:first-child::after {
+  content: ${JSON.stringify(t(" (나)", " (you)"))};
+}
+/* Local time on its own row under a divider, with a clock icon. */
+${IDENTITY} > p:nth-of-type(1) {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  margin: 16px -16px 0 !important;
+  padding: 14px 16px 0 !important;
+  border-top: 1px solid color-mix(in srgb, var(--text-standard) 12%, transparent);
+  font-size: 15px !important;
+  color: var(--text-standard) !important;
+  text-align: left !important;
+}
+${IDENTITY} > p:nth-of-type(1)::before {
+  content: "";
+  flex: none;
+  width: 18px;
+  height: 18px;
+  background: currentColor;
+  -webkit-mask: ${clock} center / contain no-repeat;
+  mask: ${clock} center / contain no-repeat;
+}
+${IDENTITY} > p:nth-of-type(n + 2) { display: none !important; }
+${IDENTITY} > :not(div:first-child, p) { grid-column: 1 / -1; }
+${CONTENT} > div:nth-child(2) {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  display: flex !important;
+  gap: 8px !important;
+  padding: 14px 0 0 !important;
+  margin: 0 !important;
+}
+${CARD} [data-profile-action] {
+  flex: 1 1 0 !important;
+  width: auto !important;
+  height: 32px !important;
+  padding: 0 12px !important;
+  border-radius: 6px !important;
+  corner-shape: round !important;
+  background: transparent !important;
+  border: 1px solid color-mix(in srgb, var(--text-standard) 30%, transparent) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+${CARD} [data-profile-action]:hover { background: color-mix(in srgb, var(--text-standard) 6%, transparent) !important; }
+${CARD} [data-profile-action] span[aria-hidden="true"] {
+  display: inline !important;
+  width: auto !important;
+  opacity: 1 !important;
+  max-width: none !important;
+  margin-left: 6px;
+}`;
+})()}
+
 /* @here / @channel rows added to the top of the @ suggestions, and the
    small list of our own shown when Buzz has no suggestions. */
 .slack-broadcast-popup {
@@ -1574,6 +1701,9 @@ const TRANSLATIONS = LANG === "en" ? {} : {
   Today: t("오늘", "Today"),
   Yesterday: t("어제", "Yesterday"),
   "Add emoji": "이모티콘 추가",
+  // Profile card.
+  Profile: "프로필",
+  Message: "메시지",
   // Channel right-click menu.
   "Move to…": "이동…",
   "Move to...": "이동…",
@@ -1593,6 +1723,7 @@ const TRANSLATIONS = LANG === "en" ? {} : {
   "Remove message": "메시지 삭제",
 };
 const TRANSLATION_PATTERNS = LANG === "en" ? [] : [
+  [/^(.+) local time$/, "현지 시간 $1"],
   [/^Managed by (.+)$/, "$1 님이 관리"],
   [/^(\d+) repl(?:y|ies)$/, "답글 $1개"],
   [/^Last reply (.+)$/, "마지막 답글 $1"],
@@ -3307,7 +3438,114 @@ function broadcastHighlights(ctx) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Hovering a sender's name opens the same profile card as hovering their
+// picture, as in Slack. Buzz only opens it from the picture, so the hover is
+// passed on to the picture's card trigger in the same message row.
+const NAME_HOVER_CARD = true;
+const NAME_HOVER_DELAY = 500;
+
+function nameHoverProfileCard(ctx) {
+  if (!NAME_HOVER_CARD) return;
+  let timer;
+  let active;
+  const triggerFor = (name) =>
+    name.closest("[data-highlight-surface]")?.querySelector("[data-preview-card-trigger]");
+  const send = (el, type, related) => {
+    const Ctor = type.startsWith("pointer") ? PointerEvent : MouseEvent;
+    el.dispatchEvent(new Ctor(type, { bubbles: true, cancelable: true, composed: true, relatedTarget: related, pointerType: "mouse" }));
+  };
+  const enter = (trigger) => {
+    send(trigger, "pointerover", document.body);
+    send(trigger, "mouseover", document.body);
+    send(trigger, "pointermove", null);
+    send(trigger, "mousemove", null);
+  };
+  const leave = (trigger) => {
+    send(trigger, "pointerout", document.body);
+    send(trigger, "mouseout", document.body);
+  };
+  const over = (event) => {
+    const name = event.target?.closest?.("[data-message-author]");
+    if (!name || name === active) return;
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      const trigger = triggerFor(name);
+      if (!trigger) return;
+      active = name;
+      enter(trigger);
+    }, NAME_HOVER_DELAY);
+  };
+  const out = (event) => {
+    const name = event.target?.closest?.("[data-message-author]");
+    if (!name || name.contains(event.relatedTarget)) return;
+    clearTimeout(timer);
+    if (active === name) {
+      const trigger = triggerFor(name);
+      active = undefined;
+      // Let the pointer reach the card itself before treating this as leaving.
+      if (trigger && !event.relatedTarget?.closest?.('[aria-label$=" profile preview"]')) leave(trigger);
+    }
+  };
+  ctx.effect(() => {
+    document.addEventListener("pointerover", over, true);
+    document.addEventListener("pointerout", out, true);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("pointerover", over, true);
+      document.removeEventListener("pointerout", out, true);
+    };
+  });
+}
+
+// Profile cards open right above the picture, as in Slack (below it only
+// when there is no room above). Buzz places them to the right; the
+// positioner's place is overridden through CSS variables, which Buzz's own
+// positioning code never writes.
+function profileCardAbove(ctx) {
+  const place = () => {
+    const card = document.querySelector('[aria-label$=" profile preview"]');
+    const positioner = card?.closest(".buzz-preview-card-positioner") || card?.parentElement;
+    const trigger = document.querySelector("[data-preview-card-trigger][data-popup-open]");
+    if (!card || !positioner || !trigger) return;
+    const anchor = trigger.getBoundingClientRect();
+    const height = card.offsetHeight;
+    const width = card.offsetWidth;
+    let top = anchor.top - height - 8;
+    if (top < 8) top = anchor.bottom + 8;
+    const left = Math.min(Math.max(8, anchor.left), window.innerWidth - width - 8);
+    const set = (name, value) => {
+      if (positioner.style.getPropertyValue(name) !== value) positioner.style.setProperty(name, value);
+    };
+    set("--slack-card-top", `${Math.round(top)}px`);
+    set("--slack-card-left", `${Math.round(left)}px`);
+    if (!positioner.hasAttribute("data-slack-card")) positioner.setAttribute("data-slack-card", "");
+  };
+  let queued = false;
+  const queue = () => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => {
+      queued = false;
+      place();
+    });
+  };
+  ctx.effect(() => {
+    const observer = new MutationObserver(queue);
+    observer.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("scroll", queue, true);
+    window.addEventListener("resize", queue);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", queue, true);
+      window.removeEventListener("resize", queue);
+    };
+  });
+}
+
 export function apply(ctx) {
+  profileCardAbove(ctx);
+  nameHoverProfileCard(ctx);
   broadcastHighlights(ctx);
   broadcastSuggestions(ctx);
   slackMentionButton(ctx);
