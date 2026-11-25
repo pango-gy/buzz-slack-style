@@ -2202,7 +2202,7 @@ const CHANNEL_ALERTS = {
   enabled: true,
   // Default for people who have not picked channels in
   // Settings → 채널 메시지 알림: "all", or a list of channel names without #,
-  // e.g. ["notice_결제", "help_cto"]. Each person's own choice wins.
+  // e.g. ["공지", "질문"]. Each person's own choice wins.
   channels: "all",
   // Stay quiet for the channel you are looking at right now.
   skipWhileViewing: true,
