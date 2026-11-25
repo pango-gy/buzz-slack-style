@@ -5,16 +5,43 @@
 // Overrides Buzz's internal classes and color variables, which can change
 // between Buzz versions. If they do, only the affected colors revert.
 
+// ---- Language ------------------------------------------------------------
+// Language of this plugin's labels and of Buzz menu names: Korean ("ko") or
+// Buzz's own English ("en"). Each person picks it in Settings → Slack Style;
+// DEFAULT_LANGUAGE applies until they do. "auto" follows the computer's
+// language (Korean if it is set to Korean, otherwise English).
+const DEFAULT_LANGUAGE = "auto";
+const LANGUAGE_KEY = "slack-style.language.v1";
+function savedLanguage() {
+  try {
+    const saved = localStorage.getItem(LANGUAGE_KEY);
+    if (saved === "ko" || saved === "en") return saved;
+  } catch {}
+  return undefined;
+}
+function pickAutoLanguage() {
+  if (DEFAULT_LANGUAGE === "ko" || DEFAULT_LANGUAGE === "en") return DEFAULT_LANGUAGE;
+  const langs = typeof navigator !== "undefined" ? [navigator.language, ...(navigator.languages || [])] : [];
+  return langs.some((l) => String(l || "").toLowerCase().startsWith("ko")) ? "ko" : "en";
+}
+function pickLanguage() {
+  const saved = savedLanguage();
+  return saved ?? pickAutoLanguage();
+}
+// Chosen once when the plugin loads; changing it reloads the Buzz window.
+const LANG = pickLanguage();
+const t = (ko, en) => (LANG === "en" ? en : ko);
+
 export const inject = ["react", "pages", "navigation", "panels", "relay", "notifications", "settingsCards"];
 
 // Slack-style shortcuts pinned at the top of the Messages sidebar, next to
 // Activity. Each row opens Buzz's own Activity page with that tab already
 // selected. Remove a line to hide it.
 const ACTIVITY_ROWS = [
-  { id: "threads", label: "스레드", icon: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM7 8h10M7 12h6" },
-  { id: "mentions", label: "멘션", icon: "M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-3.5 7.1" },
-  { id: "dms", label: "DM", icon: "M7.9 20A9 9 0 1 0 4 16.1L2 22z" },
-  { id: "reactions", label: "반응", icon: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01" },
+  { id: "threads", label: t("스레드", "Threads"), icon: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM7 8h10M7 12h6" },
+  { id: "mentions", label: t("멘션", "Mentions"), icon: "M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-3.5 7.1" },
+  { id: "dms", label: t("DM", "DMs"), icon: "M7.9 20A9 9 0 1 0 4 16.1L2 22z" },
+  { id: "reactions", label: t("반응", "Reactions"), icon: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01" },
 ];
 
 // Edit these to change the palette.
@@ -34,6 +61,72 @@ const COLORS = {
   dockSelected: "rgba(255, 255, 255, 0.20)", // selected dock icon tile
   scrollbar: "rgba(255, 255, 255, 0.22)", // scrollbars on purple
 };
+
+// Sidebar color themes, picked per person in Settings → Slack Style. Each
+// entry overrides the matching COLORS above; all are dark sidebars with light
+// text. Add a theme by copying an entry.
+const THEMES = {
+  aubergine: { name: t("보라", "Aubergine") },
+  navy: {
+    name: t("남색", "Navy"),
+    chrome: "#0B1F33", sidebar: "#13304D", floating: "#2A4A6B",
+    text: "#CDD8E4", textMuted: "#9DB0C4", selected: "#BFD7F2", selectedText: "#0B1F33",
+  },
+  jade: {
+    name: t("초록", "Jade"),
+    chrome: "#0F3B33", sidebar: "#164D43", floating: "#2C6A5E",
+    text: "#CFE3DD", textMuted: "#9CC2B8", selected: "#BEE6D9", selectedText: "#0F3B33",
+  },
+  burgundy: {
+    name: t("버건디", "Burgundy"),
+    chrome: "#3D1220", sidebar: "#521A2C", floating: "#733246",
+    text: "#E6CDD5", textMuted: "#C29AA7", selected: "#F0C6D2", selectedText: "#3D1220",
+  },
+  graphite: {
+    name: t("회색", "Graphite"),
+    chrome: "#1F1F22", sidebar: "#2B2B2F", floating: "#45454B",
+    text: "#D4D4D8", textMuted: "#A1A1AA", selected: "#D9D9DE", selectedText: "#1F1F22",
+  },
+};
+const DEFAULT_THEME = "aubergine";
+// In Buzz's dark mode the top bar, left bar and sidebar get this much darker
+// (0 = same as light mode, 1 = black), like Slack's dark mode.
+const DARK_MODE_DARKEN = { chrome: 0.45, sidebar: 0.42, floating: 0.3 };
+const THEME_KEY = "slack-style.theme.v1";
+const BASE_COLORS = { ...COLORS };
+let themeStyle;
+function savedTheme() {
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved && Object.hasOwn(THEMES, saved)) return saved;
+  } catch {}
+  return Object.hasOwn(THEMES, DEFAULT_THEME) ? DEFAULT_THEME : "aubergine";
+}
+// Switch COLORS to a theme; when the stylesheet is already on the page it is
+// rebuilt at once, so the change needs no reload.
+function mixWithBlack(hex, amount) {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const ch = (shift) => Math.round(((n >> shift) & 255) * (1 - amount));
+  return `#${[16, 8, 0].map((sh) => ch(sh).toString(16).padStart(2, "0")).join("")}`;
+}
+// The stylesheet refers to every palette color as var(--ss-<name>), defined
+// once for light mode and once, darker, for Buzz's dark mode.
+function buildThemedCss() {
+  const keys = Object.keys(COLORS);
+  const refs = Object.fromEntries(keys.map((k) => [k, `var(--ss-${k})`]));
+  const vars = (pick) => keys.map((k) => `--ss-${k}: ${pick(k)};`).join(" ");
+  const dark = (k) => (DARK_MODE_DARKEN[k] ? mixWithBlack(COLORS[k], DARK_MODE_DARKEN[k]) : COLORS[k]);
+  return `:root { ${vars((k) => COLORS[k])} }
+:root[data-color-mode="dark"] { ${vars(dark)} }
+${buildCss(refs)}`;
+}
+function switchTheme(id) {
+  const { name, ...colors } = THEMES[id] ?? {};
+  Object.assign(COLORS, BASE_COLORS, colors);
+  if (themeStyle) themeStyle.textContent = buildThemedCss();
+}
 
 // Text rendering. Slack uses "antialiased", the same as Buzz, so this stays
 // empty; "auto" draws heavier glyphs.
@@ -60,17 +153,17 @@ const FORMAT_BAR_HEIGHT = 38;
 // Buttons from the left; "|" is a divider. Remove an entry to hide it.
 // key/shift/alt is the Buzz shortcut (with Cmd, or Ctrl on Windows/Linux).
 const FORMAT_BUTTONS = [
-  { label: "굵게", text: "B", style: "font-weight:800", key: "b" },
-  { label: "기울임꼴", text: "I", style: "font-style:italic;font-family:Georgia,serif", key: "i" },
-  { label: "취소선", text: "S", style: "text-decoration:line-through", key: "x", shift: true },
+  { label: t("굵게", "Bold"), text: "B", style: "font-weight:800", key: "b" },
+  { label: t("기울임꼴", "Italic"), text: "I", style: "font-style:italic;font-family:Georgia,serif", key: "i" },
+  { label: t("취소선", "Strikethrough"), text: "S", style: "text-decoration:line-through", key: "x", shift: true },
   "|",
-  { label: "링크", key: "u", shift: true, icon: "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" },
-  { label: "순서 있는 목록", key: "7", shift: true, icon: "M10 6h11M10 12h11M10 18h11M4 6h1v4M4 10h2M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" },
-  { label: "글머리 기호 목록", key: "8", shift: true, icon: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" },
+  { label: t("링크", "Link"), key: "u", shift: true, icon: "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" },
+  { label: t("순서 있는 목록", "Numbered list"), key: "7", shift: true, icon: "M10 6h11M10 12h11M10 18h11M4 6h1v4M4 10h2M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" },
+  { label: t("글머리 기호 목록", "Bulleted list"), key: "8", shift: true, icon: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" },
   "|",
-  { label: "인용", key: "9", shift: true, icon: "M4 5v14M9 7h11M9 12h11M9 17h7" },
-  { label: "코드", key: "e", icon: "m16 18 6-6-6-6M8 6l-6 6 6 6" },
-  { label: "코드 블록", key: "c", alt: true, icon: "M4 4h16v16H4zM10 9.5 7.5 12l2.5 2.5M14 9.5l2.5 2.5-2.5 2.5" },
+  { label: t("인용", "Quote"), key: "9", shift: true, icon: "M4 5v14M9 7h11M9 12h11M9 17h7" },
+  { label: t("코드", "Code"), key: "e", icon: "m16 18 6-6-6-6M8 6l-6 6 6 6" },
+  { label: t("코드 블록", "Code block"), key: "c", alt: true, icon: "M4 4h16v16H4zM10 9.5 7.5 12l2.5 2.5M14 9.5l2.5 2.5-2.5 2.5" },
 ];
 
 // Message box border strength (% of the text color): idle, and while typing.
@@ -88,13 +181,13 @@ const COMPOSER_BUTTON_ORDER = ["Attach files", "Toggle formatting", "Emoji and G
 
 // Words after the channel name in an empty message box, like Slack's
 // "#채널에 메시지 보내기". Set to "" to keep Buzz's "Message #channel".
-const PLACEHOLDER_SUFFIX = "에 메시지 보내기";
+const PLACEHOLDER_SUFFIX = t("에 메시지 보내기", "");
 // Other empty message boxes, matched by the start of Buzz's English text.
 // The person's name can't be kept here, so DMs read just "메시지 보내기".
-const PLACEHOLDERS = {
-  "Message ": "메시지 보내기",
-  "Reply ": "답글...",
-  "Edit message": "메시지 편집",
+const PLACEHOLDERS = LANG === "en" ? {} : {
+  "Message ": t("메시지 보내기", "Message"),
+  "Reply ": t("답글...", "Reply..."),
+  "Edit message": t("메시지 편집", "Edit message"),
 };
 
 // Corner radius (px) of the sidebar and conversation card, and of other
@@ -166,12 +259,12 @@ const STACK_GAP = 3;
 // Dock labels to replace, keyed by part of the dock tab's page id:
 // Messages (buzz.channels) becomes 홈 like Slack; "Create an agent" (the
 // bestie page) becomes bot.
-const DOCK_RENAMES = { channels: "홈", bestie: "bot" };
+const DOCK_RENAMES = { channels: t("홈", "Home"), bestie: "bot" };
 // Extra dock apps, shown below Home in this order. Each opens Buzz's
 // Activity page on the given tab. Remove a line to hide it.
 const DOCK_APPS = [
-  { id: "dm", label: "DM", activity: "dms", icon: "M7.9 20A9 9 0 1 0 4 16.1L2 22z" },
-  { id: "activity", label: "내 활동", activity: "all", icon: "M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0" },
+  { id: "dm", label: t("DM", "DMs"), activity: "dms", icon: "M7.9 20A9 9 0 1 0 4 16.1L2 22z" },
+  { id: "activity", label: t("내 활동", "Activity"), activity: "all", icon: "M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0" },
 ];
 
 // Dock icons to replace, keyed by part of the tab's page id (SVG path on a
@@ -196,7 +289,7 @@ const HIDE_ACTIVITY_ROW = true;
 // (built by this plugin) listing recent huddles in your channels; choosing
 // one opens its channel. Set HUDDLES to false to hide it.
 const HUDDLES = true;
-const HUDDLES_LABEL = "허들";
+const HUDDLES_LABEL = t("허들", "Huddles");
 if (HUDDLES) PINNED_ORDER.splice(1, 0, HUDDLES_LABEL);
 
 // Dock icon tile and glyph size in px (Slack's tile is about 36).
@@ -1159,32 +1252,32 @@ function registerDockApps(ctx) {
 // Korean names for Buzz's own interface text. Only whole labels that match
 // exactly are replaced, and never inside messages, the composer or code.
 // Add or change entries freely; a pattern entry uses $1 for the number.
-const TRANSLATIONS = {
-  Activity: "내 활동",
-  Search: "검색",
-  All: "전체",
-  Threads: "스레드",
-  Mentions: "멘션",
+const TRANSLATIONS = LANG === "en" ? {} : {
+  Activity: t("내 활동", "Activity"),
+  Search: t("검색", "Search"),
+  All: t("전체", "All"),
+  Threads: t("스레드", "Threads"),
+  Mentions: t("멘션", "Mentions"),
   DMs: "DM",
-  Reactions: "반응",
-  From: "보낸 사람",
-  Unread: "읽지 않음",
-  Solo: "개인",
-  Starred: "즐겨찾기",
-  Team: "팀",
-  Channels: "채널",
-  Forums: "포럼",
-  "Direct messages": "다이렉트 메시지",
-  "Show fewer": "간단히 보기",
-  "Show more": "더 보기",
-  Agents: "에이전트",
-  "New messages": "새 항목",
-  Today: "오늘",
-  Yesterday: "어제",
+  Reactions: t("반응", "Reactions"),
+  From: t("보낸 사람", "From"),
+  Unread: t("읽지 않음", "Unread"),
+  Solo: t("개인", "Solo"),
+  Starred: t("즐겨찾기", "Starred"),
+  Team: t("팀", "Team"),
+  Channels: t("채널", "Channel"),
+  Forums: t("포럼", "Forums"),
+  "Direct messages": t("다이렉트 메시지", "Direct messages"),
+  "Show fewer": t("간단히 보기", "Show fewer"),
+  "Show more": t("더 보기", "Show more"),
+  Agents: t("에이전트", "Agents"),
+  "New messages": t("새 항목", "New messages"),
+  Today: t("오늘", "Today"),
+  Yesterday: t("어제", "Yesterday"),
 };
-const TRANSLATION_PATTERNS = [
-  [/^(\d+) unread$/, "$1개 안 읽음"],
-  [/^(\d+) more$/, "$1개 더 보기"],
+const TRANSLATION_PATTERNS = LANG === "en" ? [] : [
+  [/^(\d+) unread$/, t("$1개 안 읽음", "$1 unread")],
+  [/^(\d+) more$/, t("$1개 더 보기", "$1 more")],
 ];
 const SKIP_TEXT = "[data-highlight-surface], [data-composer-surface], [contenteditable], input, textarea, pre, code";
 
@@ -1256,7 +1349,7 @@ function addFormatBars(ctx) {
       const bar = document.createElement("div");
       bar.className = "slack-format-bar";
       bar.setAttribute("role", "toolbar");
-      bar.setAttribute("aria-label", "서식");
+      bar.setAttribute("aria-label", t("서식", "Formatting"));
       for (const b of FORMAT_BUTTONS) {
         if (b === "|") {
           bar.appendChild(document.createElement("span"));
@@ -1298,7 +1391,7 @@ function addFormatBars(ctx) {
       if (hide) root.dataset.slackFormatBar = "hidden";
       else delete root.dataset.slackFormatBar;
       localStorage.setItem(STORE, hide ? "hidden" : "shown");
-      toggle.title = hide ? "서식 표시" : "서식 숨기기";
+      toggle.title = hide ? t("서식 표시", "Show formatting") : t("서식 숨기기", "Hide formatting");
     };
     document.addEventListener("click", onClick, true);
     // Bottom row in Slack's order. The row is the closest element holding
@@ -1334,7 +1427,7 @@ function addFormatBars(ctx) {
         close.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
       }
       for (const toggle of document.querySelectorAll('[data-composer-surface] button[aria-label="Toggle formatting"]')) {
-        const title = root.dataset.slackFormatBar === "hidden" ? "서식 표시" : "서식 숨기기";
+        const title = root.dataset.slackFormatBar === "hidden" ? t("서식 표시", "Show formatting") : t("서식 숨기기", "Hide formatting");
         if (toggle.title !== title) toggle.title = title;
       }
       for (const surface of document.querySelectorAll("[data-composer-surface]")) {
@@ -1365,8 +1458,8 @@ function addDockNewButton(ctx) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "slack-new-button";
-    button.title = "새로 만들기";
-    button.setAttribute("aria-label", "새로 만들기");
+    button.title = t("새로 만들기", "New");
+    button.setAttribute("aria-label", t("새로 만들기", "New"));
     button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
     button.addEventListener("click", () => {
       const target = document.querySelector(`${SIDEBAR} [aria-label="New options"]`);
@@ -1441,7 +1534,7 @@ function messageFiles(event) {
       else if (key === "dim") file.dim = value;
     }
     if (!file.url) continue;
-    if (!file.name) file.name = decodeURIComponent(file.url.split("/").pop() || "파일");
+    if (!file.name) file.name = decodeURIComponent(file.url.split("/").pop() || t("파일", "Files"));
     files.push(file);
   }
   return files;
@@ -1478,7 +1571,7 @@ function registerFilesPanel(ctx) {
   }
 
   function FilesPanel({ channelContext, context }) {
-    if (typeof ctx.panels.useTabTitle === "function") ctx.panels.useTabTitle("파일");
+    if (typeof ctx.panels.useTabTitle === "function") ctx.panels.useTabTitle(t("파일", "Files"));
     const relay = React.useSyncExternalStore(ctx.relay.subscribe, ctx.relay.snapshot);
     const ready = relay && relay.status === "ready" && channelContext && relay.scope === channelContext.scope;
     const session = ready ? relay.session : null;
@@ -1527,7 +1620,7 @@ function registerFilesPanel(ctx) {
       return () => controller.abort();
     }, [load]);
 
-    if (!session) return h("div", { className: "slack-files" }, h("p", { className: "slack-files-note" }, "연결되는 중입니다…"));
+    if (!session) return h("div", { className: "slack-files" }, h("p", { className: "slack-files-note" }, t("연결되는 중입니다…", "Connecting…")));
 
     const profiles = session.profiles && typeof session.profiles.snapshot === "function" ? session.profiles.snapshot() : null;
     const authorName = (pubkey) => {
@@ -1543,7 +1636,7 @@ function registerFilesPanel(ctx) {
       } catch (error) {
         // Fall through to the note below.
       }
-      setState((current) => ({ ...current, error: "이 파일은 여기서 열 수 없습니다. 대화에서 열어 주세요." }));
+      setState((current) => ({ ...current, error: t("이 파일은 여기서 열 수 없습니다. 대화에서 열어 주세요.", "This file can't be opened here. Open it from the conversation.") }));
     };
     const thumb = (file) => {
       if (/^image\//.test(file.type || "") && typeof session.media === "function") {
@@ -1574,23 +1667,23 @@ function registerFilesPanel(ctx) {
             h(
               "span",
               { className: "slack-files-meta" },
-              [authorName(file.author), new Date(file.at * 1000).toLocaleDateString("ko-KR"), fileSize(file.size)].filter(Boolean).join(" · "),
+              [authorName(file.author), new Date(file.at * 1000).toLocaleDateString(t("ko-KR", "en-US")), fileSize(file.size)].filter(Boolean).join(" · "),
             ),
           ),
         ),
       ),
       state.error ? h("p", { className: "slack-files-note" }, state.error) : null,
-      state.loading ? h("p", { className: "slack-files-note" }, "불러오는 중…") : null,
-      !state.loading && !state.files.length && !state.error ? h("p", { className: "slack-files-note" }, "최근 메시지에 파일이 없습니다.") : null,
+      state.loading ? h("p", { className: "slack-files-note" }, t("불러오는 중…", "Loading…")) : null,
+      !state.loading && !state.files.length && !state.error ? h("p", { className: "slack-files-note" }, t("최근 메시지에 파일이 없습니다.", "No files in recent messages.")) : null,
       !state.loading && !state.done
-        ? h("button", { type: "button", className: "slack-files-more", onClick: () => load(state.oldest, state.files) }, "이전 메시지에서 더 찾기")
+        ? h("button", { type: "button", className: "slack-files-more", onClick: () => load(state.oldest, state.files) }, t("이전 메시지에서 더 찾기", "Search older messages"))
         : null,
     );
   }
 
   ctx.panels.register({
     id: "files",
-    title: "파일",
+    title: t("파일", "Files"),
     matches: () => false,
     channelLauncher: FilesLauncher,
     channelPlacement: "tab",
@@ -1685,7 +1778,7 @@ function registerHuddlesPage(ctx) {
       return () => controller.abort();
     }, [session, scope]);
 
-    if (!session) return h("div", { className: "slack-huddles" }, h("p", { className: "slack-files-note" }, "연결되는 중입니다…"));
+    if (!session) return h("div", { className: "slack-huddles" }, h("p", { className: "slack-files-note" }, t("연결되는 중입니다…", "Connecting…")));
     const profiles = session.profiles && typeof session.profiles.snapshot === "function" ? session.profiles.snapshot() : null;
     const authorName = (pubkey) => {
       const profile = profiles && typeof profiles.get === "function" ? profiles.get(pubkey) : null;
@@ -1702,8 +1795,8 @@ function registerHuddlesPage(ctx) {
       });
     };
     const when = (row) => {
-      const start = new Date(row.at * 1000).toLocaleString("ko-KR", { month: "long", day: "numeric", hour: "numeric", minute: "2-digit" });
-      if (row.end) return `${start} · ${Math.max(1, Math.round((row.end - row.at) / 60))}분`;
+      const start = new Date(row.at * 1000).toLocaleString(t("ko-KR", "en-US"), { month: "long", day: "numeric", hour: "numeric", minute: "2-digit" });
+      if (row.end) return `${start} · ${Math.max(1, Math.round((row.end - row.at) / 60))}${t("분", " min")}`;
       return start;
     };
     return h(
@@ -1718,19 +1811,19 @@ function registerHuddlesPage(ctx) {
           h(
             "span",
             { className: "slack-files-text" },
-            h("span", { className: "slack-files-name" }, row.name || "채널"),
+            h("span", { className: "slack-files-name" }, row.name || t("채널", "Channel")),
             h(
               "span",
               { className: "slack-files-meta" },
-              row.live ? h("span", { className: "slack-huddles-live" }, "진행 중 · ") : null,
-              [authorName(row.author) && `${authorName(row.author)} 님이 시작`, when(row)].filter(Boolean).join(" · "),
+              row.live ? h("span", { className: "slack-huddles-live" }, t("진행 중 · ", "Live · ")) : null,
+              [authorName(row.author) && t(`${authorName(row.author)} 님이 시작`, `started by ${authorName(row.author)}`), when(row)].filter(Boolean).join(" · "),
             ),
           ),
         ),
       ),
       state.error ? h("p", { className: "slack-files-note" }, state.error) : null,
-      state.loading ? h("p", { className: "slack-files-note" }, "불러오는 중…") : null,
-      !state.loading && !state.rows.length && !state.error ? h("p", { className: "slack-files-note" }, "최근 허들이 없습니다.") : null,
+      state.loading ? h("p", { className: "slack-files-note" }, t("불러오는 중…", "Loading…")) : null,
+      !state.loading && !state.rows.length && !state.error ? h("p", { className: "slack-files-note" }, t("최근 허들이 없습니다.", "No recent huddles.")) : null,
     );
   }
 
@@ -1781,7 +1874,7 @@ function addChannelTabs(ctx) {
       const row = document.createElement("div");
       row.className = "slack-channel-tabs";
       row.setAttribute("role", "toolbar");
-      row.setAttribute("aria-label", "채널 탭");
+      row.setAttribute("aria-label", t("채널 탭", "Channel tabs"));
       const add = (id, label, run) => {
         const button = document.createElement("button");
         button.type = "button";
@@ -1795,15 +1888,15 @@ function addChannelTabs(ctx) {
         row.appendChild(button);
       };
       const files = () => filesLauncher.props;
-      add("messages", "메시지", () => {
+      add("messages", t("메시지", "Messages"), () => {
         const props = files();
         if (props && props.pressed && props.available()) props.toggle(FILES_TARGET);
       });
-      add("files", "파일", () => {
+      add("files", t("파일", "Files"), () => {
         const props = files();
         if (props && props.available()) props.toggle(FILES_TARGET);
       });
-      add("canvas", "캔버스", () => openCanvas(header));
+      add("canvas", t("캔버스", "Canvas"), () => openCanvas(header));
       return row;
     };
     const paint = () => {
@@ -1930,14 +2023,14 @@ function registerAlertSettings(ctx) {
     return h(
       "section",
       { style: { display: "flex", flexDirection: "column", gap: "var(--space-3)", padding: "var(--space-panel-inset)" } },
-      h("h2", null, "채널 메시지 알림"),
+      h("h2", null, t("채널 메시지 알림", "Channel message alerts")),
       h(
         "p",
         { style: { color: "var(--text-subtle)" } },
-        "채널에 새 메시지가 오면 알림을 받을 채널을 고릅니다. 멘션·DM·스레드 답글은 여기 설정과 관계없이 Buzz 기본 알림으로 옵니다. 알림 소리와 전체 켜기/끄기는 Notifications의 '채널 메시지'에서 바꿉니다.",
+        t("채널에 새 메시지가 오면 알림을 받을 채널을 고릅니다. 멘션·DM·스레드 답글은 여기 설정과 관계없이 Buzz 기본 알림으로 옵니다. 알림 소리와 전체 켜기/끄기는 Notifications의 '채널 메시지'에서 바꿉니다.", "Pick the channels whose new messages alert you. Mentions, DMs and thread replies always use Buzz's own alerts. Turn these alerts on or off, or change their sound, under Notifications → Channel messages."),
       ),
       !session
-        ? h("p", null, "커뮤니티에 연결되면 채널 목록이 나타납니다.")
+        ? h("p", null, t("커뮤니티에 연결되면 채널 목록이 나타납니다.", "The channel list appears once you are connected to a community."))
         : h(
             React.Fragment,
             null,
@@ -1950,7 +2043,7 @@ function registerAlertSettings(ctx) {
                 checked: choice.mode === "all",
                 onChange: () => set({ mode: "all", ids: choice.ids }),
               }),
-              "모든 채널",
+              t("모든 채널", "All channels"),
             ),
             h(
               "label",
@@ -1961,7 +2054,7 @@ function registerAlertSettings(ctx) {
                 checked: choice.mode === "selected",
                 onChange: () => set({ mode: "selected", ids: choice.ids }),
               }),
-              `고른 채널만 (${choice.ids.filter((id) => channels.some((c) => c.id === id)).length}개)`,
+              t(`고른 채널만 (${choice.ids.filter((id) => channels.some((c) => c.id === id)).length}개)`, `Selected channels only (${choice.ids.filter((id) => channels.some((c) => c.id === id)).length})`),
             ),
             h(
               "div",
@@ -1975,7 +2068,7 @@ function registerAlertSettings(ctx) {
                 },
               },
               channels.length === 0
-                ? h("p", null, "채널이 없습니다.")
+                ? h("p", null, t("채널이 없습니다.", "No channels."))
                 : channels.map((c) =>
                     h(
                       "label",
@@ -1994,7 +2087,7 @@ function registerAlertSettings(ctx) {
     );
   }
 
-  cards.register({ id: "channel-alerts", title: "채널 메시지 알림", component: ChannelAlertSettings });
+  cards.register({ id: "channel-alerts", title: t("채널 메시지 알림", "Channel message alerts"), component: ChannelAlertSettings });
 }
 
 // Each person's channel choice, saved on this computer per community and
@@ -2036,7 +2129,7 @@ function alertableChannels(session, viewer) {
         c.channelType !== "solo" &&
         (!Array.isArray(c.members) || c.members.includes(viewer)),
     )
-    .sort((a, b) => String(a.name).localeCompare(String(b.name), "ko"));
+    .sort((a, b) => String(a.name).localeCompare(String(b.name), LANG));
 }
 
 function startChannelAlerts(ctx) {
@@ -2044,7 +2137,7 @@ function startChannelAlerts(ctx) {
   const relay = ctx.relay;
   const service = ctx.notifications;
   if (!relay?.snapshot || !relay?.subscribe || !service?.register) return;
-  const category = service.register({ id: "channel-messages", label: "채널 메시지" });
+  const category = service.register({ id: "channel-messages", label: t("채널 메시지", "Channel messages") });
   registerAlertSettings(ctx);
   const submit = category?.submit;
   if (typeof submit !== "function") return;
@@ -2158,7 +2251,90 @@ function startChannelAlerts(ctx) {
   });
 }
 
+// Settings → Slack Style: pick the language. Labels are built when the
+// plugin loads, so a change applies after the Buzz window reloads.
+function registerLanguageSettings(ctx) {
+  const cards = ctx.settingsCards;
+  if (!cards?.register) return;
+  const React = ctx.react;
+  const h = React.createElement;
+  function LanguageSettings() {
+    const [choice, setChoice] = React.useState(() => savedLanguage() ?? "auto");
+    const [theme, setTheme] = React.useState(savedTheme);
+    const pickTheme = (id) => {
+      setTheme(id);
+      try {
+        localStorage.setItem(THEME_KEY, id);
+      } catch {}
+      switchTheme(id);
+    };
+    const swatch = (id) => {
+      const colors = { ...BASE_COLORS, ...THEMES[id] };
+      const active = theme === id;
+      return h(
+        "button",
+        {
+          key: id,
+          type: "button",
+          title: THEMES[id].name,
+          "aria-pressed": active,
+          onClick: () => pickTheme(id),
+          style: {
+            display: "flex", flexDirection: "column", alignItems: "center", gap: "6px",
+            padding: "8px", border: active ? "2px solid var(--text-standard)" : "2px solid transparent",
+            borderRadius: "10px", background: "transparent", cursor: "pointer", color: "inherit",
+          },
+        },
+        h("span", {
+          "aria-hidden": "true",
+          style: {
+            display: "flex", width: "64px", height: "40px", borderRadius: "6px", overflow: "hidden",
+            boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.12)",
+          },
+        },
+          h("span", { style: { width: "16px", background: colors.chrome } }),
+          h("span", { style: { flex: 1, background: colors.sidebar, display: "flex", alignItems: "center", padding: "0 6px" } },
+            h("span", { style: { flex: 1, height: "8px", borderRadius: "3px", background: colors.selected } }))),
+        h("span", { style: { fontSize: "12px" } }, THEMES[id].name),
+      );
+    };
+    const pick = (next) => {
+      setChoice(next);
+      try {
+        if (next === "auto") localStorage.removeItem(LANGUAGE_KEY);
+        else localStorage.setItem(LANGUAGE_KEY, next);
+      } catch {}
+    };
+    const changed = (choice === "auto" ? pickAutoLanguage() : choice) !== LANG;
+    const row = { display: "flex", alignItems: "center", gap: "var(--space-2)", padding: "4px 0", cursor: "pointer" };
+    const option = (value, label) =>
+      h("label", { key: value, style: row },
+        h("input", { type: "radio", name: "slack-style-language", checked: choice === value, onChange: () => pick(value) }),
+        label);
+    return h(
+      "section",
+      { style: { display: "flex", flexDirection: "column", gap: "var(--space-3)", padding: "var(--space-panel-inset)" } },
+      h("h2", null, "Slack Style"),
+      h("p", { style: { color: "var(--text-subtle)" } },
+        "언어 · Language: 플러그인 메뉴와 Buzz 메뉴 이름을 한국어로 바꿀지 고릅니다. / Choose whether this plugin's labels and Buzz's menu names are shown in Korean or English."),
+      option("ko", "한국어"),
+      option("en", "English"),
+      option("auto", "자동 · Automatic (computer language)"),
+      h("h3", { style: { marginTop: "var(--space-3)" } }, t("색상", "Color")),
+      h("div", { style: { display: "flex", flexWrap: "wrap", gap: "var(--space-2)" } }, Object.keys(THEMES).map(swatch)),
+      changed
+        ? h("div", { style: { display: "flex", alignItems: "center", gap: "var(--space-3)" } },
+            h("p", null, "적용하려면 Buzz 화면을 다시 불러옵니다. / Reload the Buzz window to apply."),
+            h("button", { type: "button", onClick: () => window.location.reload() }, "다시 불러오기 · Reload"))
+        : null,
+    );
+  }
+  cards.register({ id: "language", title: "Slack Style", component: LanguageSettings });
+}
+
 export function apply(ctx) {
+  switchTheme(savedTheme());
+  registerLanguageSettings(ctx);
   startChannelAlerts(ctx);
   addFormatBars(ctx);
   addDockNewButton(ctx);
@@ -2170,8 +2346,12 @@ export function apply(ctx) {
   ctx.effect(() => {
     const style = document.createElement("style");
     style.dataset.plugin = "team.slack-sidebar";
-    style.textContent = buildCss(COLORS);
+    style.textContent = buildThemedCss();
     document.head.appendChild(style);
-    return () => style.remove();
+    themeStyle = style;
+    return () => {
+      if (themeStyle === style) themeStyle = undefined;
+      style.remove();
+    };
   });
 }

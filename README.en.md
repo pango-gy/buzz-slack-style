@@ -30,6 +30,14 @@ When a new version is published, open the same screen and click **Update** (or *
 Recommended: **Settings → Appearance → Message density → Compact**
 (shows every message on the left without bubbles, as in Slack).
 
+### Language and color
+
+Each person picks these under **Settings → Slack Style**.
+
+- **Language**: 한국어 / English / Automatic (computer language). English keeps Buzz's menus in their original English and shows this plugin's own labels in English too. Click **Reload** after changing it.
+- **Color**: Aubergine · Navy · Jade · Burgundy · Graphite. Applies right away.
+- In Buzz's dark mode the sidebar and the top and left bars turn darker automatically.
+
 ### Turn it off or remove it
 
 Click **Disable** under **Manage plugins → Slack Style** and Buzz returns to its original look right away.
@@ -61,7 +69,10 @@ All settings are constants near the top of `plugin.js`. After editing, reload th
 
 | Constant | What it controls |
 | --- | --- |
-| `COLORS` | Colors of the sidebar, left bar, selection and so on |
+| `COLORS` | Base colors of the sidebar, left bar, selection and so on |
+| `THEMES`, `DEFAULT_THEME` | Color themes to pick from; the theme for people who have not picked |
+| `DARK_MODE_DARKEN` | How much darker the top and left bars and the sidebar get in dark mode |
+| `DEFAULT_LANGUAGE` | Language for people who have not picked (`"auto"`, `"ko"`, `"en"`) |
 | `SIZES` | Channel row height, sidebar and message text size, channel title size |
 | `TRANSLATIONS` | Menu names to show in Korean (`"English": "한글"`) |
 | `ACTIVITY_ROWS`, `HIDE_ACTIVITY_ROW` | Shortcuts pinned at the top of the sidebar and their order; hide Buzz's own Activity row |
