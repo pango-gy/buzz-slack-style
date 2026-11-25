@@ -561,6 +561,17 @@ ${SIDEBAR} details > summary ~ * {
 ${SIDEBAR} :is([data-channel-sidebar-row], nav.shell-pages) .navigation-item-label {
   font-size: ${SIZES.sidebarText}px !important;
 }
+/* Unread channels are white and bold in every section. Stated outright
+   because the section-title rule below otherwise wins inside 즐겨찾기
+   (Starred), whose rows sit differently from the other sections. */
+${SIDEBAR} [data-ordinary]:not([data-selected]) :is(.navigation-item-label, .navigation-item-label *) {
+  color: ${c.textStrong} !important;
+  font-weight: ${UNREAD_WEIGHT} !important;
+}
+${SIDEBAR} [data-ordinary][data-selected] :is(.navigation-item-label, .navigation-item-label *) {
+  color: ${c.selectedText} !important;
+  font-weight: ${UNREAD_WEIGHT} !important;
+}
 /* Section titles read like rows in Slack: same size, regular ink. */
 ${SIDEBAR} details > summary,
 ${SIDEBAR} details > summary :not(svg, svg *) {
@@ -733,6 +744,42 @@ span:has(> [data-day]) > :not([data-day]) { display: none !important; }
 [data-highlight-surface] pre code,
 [data-composer-surface] [contenteditable] pre code {
   padding: 8px !important;
+  font-size: 12px !important;
+  line-height: 18px !important;
+}
+/* Copy button on a code block: smaller, so it fits inside a one-line block
+   instead of being cut off at the bottom. */
+[data-highlight-surface] pre > span:has(> [aria-label="Copy code block"]) {
+  top: 4px !important;
+  inset-inline-end: 4px !important;
+  border-radius: 4px !important;
+  corner-shape: round !important;
+  background: var(--surface-panel, #fff) !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text-standard) 13%, transparent);
+}
+[data-highlight-surface] pre [aria-label="Copy code block"] {
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border-radius: 4px !important;
+  corner-shape: round !important;
+}
+[data-highlight-surface] pre [aria-label="Copy code block"] svg { width: 14px !important; height: 14px !important; }
+/* While typing, the code block is one box with no inner one: the padding
+   goes on the box itself, and the line height matches the text so the
+   cursor is as tall as the line, not taller than the box. */
+[data-composer-surface] [contenteditable] pre {
+  padding: 8px !important;
+  line-height: 18px !important;
+  min-height: 0 !important;
+}
+[data-composer-surface] [contenteditable] pre :is(code, span, div) {
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
   font-size: 12px !important;
   line-height: 18px !important;
 }
