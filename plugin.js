@@ -3582,8 +3582,9 @@ function dmSectionMenu(ctx) {
 // are left alone, since the files cannot be put back.
 // Width (px) of a file card in messages (measured from Slack: 328).
 const FILE_CARD_WIDTH = 328;
-// Corner radius and gap (px) of file cards in messages (measured from Slack).
-const FILE_CARD_RADIUS = 8;
+// Corner radius and gap (px) of file cards in messages (measured from Slack:
+// the border runs straight from 8px in, which a 12px round corner gives).
+const FILE_CARD_RADIUS = 12;
 const FILE_CARD_GAP = 8;
 // Width (px) of a file chip in the message box (Slack: ~234).
 const COMPOSER_FILE_WIDTH = 234;
