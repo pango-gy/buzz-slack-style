@@ -4114,7 +4114,9 @@ const REACTION_PILL = {
   item: { height: "24px", "border-radius": "12px" },
   // Buzz draws the emoji at 7/6 of its size; Slack's is a 16px picture,
   // which a 14px colour emoji glyph matches.
-  emoji: { "font-size": "14px", "line-height": "1", scale: "1", padding: "0", "max-width": "none" },
+  // Buzz also clips the emoji's box (overflow: hidden), which cut a colour
+  // glyph's top and bottom once its line got shorter; let it show whole.
+  emoji: { "font-size": "14px", "line-height": "18px", height: "18px", scale: "1", padding: "0", "max-width": "none", overflow: "visible", "text-overflow": "clip" },
   picture: { width: "16px", height: "16px", scale: "1" },
 };
 function reactionPills(ctx) {
