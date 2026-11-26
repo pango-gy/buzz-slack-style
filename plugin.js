@@ -1725,10 +1725,39 @@ ${SLACK_MENUS ? `
 [data-composer-surface] section[aria-label="Attachments"] li[data-media] [data-media-preview]::after {
   border-color: color-mix(in srgb, var(--text-standard) 13%, transparent) !important;
 }
-/* Its remove / progress button, smaller to fit the smaller tile. */
+/* Its remove button, as in Slack: a black 20px circle with a white X and a
+   white ring, sitting on the tile's top-right corner. The list scrolls
+   sideways, so it gets room for the part that sticks out. */
+[data-composer-surface] section[aria-label="Attachments"] ul {
+  padding-top: 8px !important;
+  padding-right: 8px !important;
+}
+[data-composer-surface] section[aria-label="Attachments"] li[data-media] [data-remove],
+[data-composer-surface] section[aria-label="Attachments"] li[data-media] > :has(> button) {
+  top: -8px !important;
+  right: -8px !important;
+}
 [data-composer-surface] section[aria-label="Attachments"] li[data-media] button {
-  transform: scale(0.8);
-  transform-origin: top right;
+  width: 20px !important; height: 20px !important;
+  min-width: 0 !important; min-height: 0 !important; padding: 0 !important;
+  border-radius: 50% !important; corner-shape: round !important;
+  background: #1D1C1D !important; color: #fff !important;
+  box-shadow: 0 0 0 2px #fff !important; border: 0 !important;
+  display: inline-flex !important; align-items: center; justify-content: center;
+}
+[data-composer-surface] section[aria-label="Attachments"] li[data-media] button svg {
+  width: 12px !important; height: 12px !important;
+}
+/* While uploading, the same spot shows the turning ring on white, as in
+   Slack; hovering it still shows the black X to cancel. */
+[data-composer-surface] section[aria-label="Attachments"] li[data-media]:not(:hover) button:has([role="progressbar"]) {
+  background: #fff !important;
+}
+[data-composer-surface] section[aria-label="Attachments"] li[data-media] button:has([role="progressbar"]) svg {
+  width: 16px !important; height: 16px !important;
+}
+:root[data-color-mode="dark"] [data-composer-surface] section[aria-label="Attachments"] li[data-media] button {
+  box-shadow: 0 0 0 2px var(--surface-composer, #1A1D21) !important;
 }
 /* Upload progress on an attachment: Slack's blue arc on a light ring that
    keeps turning until the upload ends (Buzz turns it only while preparing). */
