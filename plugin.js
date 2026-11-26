@@ -4104,6 +4104,51 @@ function filePreviews(ctx) {
   });
 }
 
+// Reaction pills: Buzz fixes these buttons at 36×36 in a way stylesheet
+// rules cannot override (checked in the app: the rules match but lose), so
+// the pill's size is set on each button itself.
+const REACTION_PILL = {
+  button: { width: "auto", "min-width": "0", "max-width": "none", height: "24px", "min-height": "24px", padding: "0 8px", "border-radius": "12px", display: "inline-flex", "align-items": "center", "justify-content": "center", overflow: "visible", background: "transparent" },
+  add: { padding: "0 6px", "min-width": "32px" },
+  slot: { width: "auto", "min-width": "0", "max-width": "none", height: "auto", overflow: "visible", display: "inline-flex", "align-items": "center" },
+  item: { height: "24px", "border-radius": "12px" },
+};
+function reactionPills(ctx) {
+  const set = (el, styles) => {
+    for (const [name, value] of Object.entries(styles))
+      if (el.style.getPropertyValue(name) !== value || el.style.getPropertyPriority(name) !== "important") el.style.setProperty(name, value, "important");
+  };
+  const sync = () => {
+    for (const item of document.querySelectorAll('[data-message-reactions] [class*="_reactionItem_"], [data-message-reactions][class*="_inlineReactionTool_"]')) {
+      set(item, REACTION_PILL.item);
+      const button = item.querySelector("button");
+      if (!button) continue;
+      set(button, REACTION_PILL.button);
+      if (item.matches('[class*="_inlineReactionTool_"]')) set(button, REACTION_PILL.add);
+      for (const slot of button.children) {
+        set(slot, REACTION_PILL.slot);
+        for (const inner of slot.children) if (inner.tagName !== "IMG" && !inner.matches('[class*="_reactionNativeEmoji_"]')) set(inner, REACTION_PILL.slot);
+      }
+    }
+  };
+  ctx.effect(() => {
+    let queued = false;
+    const observer = new MutationObserver(() => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        sync();
+      });
+    });
+    // style too: if Buzz rewrites a button's own style, put the pill back
+    // (set() only writes when a value differs, so this cannot loop).
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["style"] });
+    sync();
+    return () => observer.disconnect();
+  });
+}
+
 // Above two or more files in a message, Slack shows "2개의 첨부 파일 ▾" (folds
 // and unfolds them) and "모두 다운로드" (downloads each one). Buzz shows only
 // the cards, so this adds that line before each group of cards.
@@ -5559,6 +5604,7 @@ export function apply(ctx) {
   filePreviews(ctx);
   composerFileTypes(ctx);
   fileGroupHeaders(ctx);
+  reactionPills(ctx);
   addFormatBars(ctx);
   addDockNewButton(ctx);
   addChannelTabs(ctx);
