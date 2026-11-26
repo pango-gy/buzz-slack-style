@@ -1696,11 +1696,13 @@ ${SLACK_MENUS ? `
 .slack-link-card-site { display: flex; align-items: center; gap: 6px; font-size: 13px; line-height: 18px; color: var(--text-subtle); margin-top: 2px; }
 .slack-link-card-icon { width: 16px; height: 16px; border-radius: 3px; object-fit: contain; flex: none; }
 .slack-link-card-image { width: 80px; height: 80px; margin: 12px 12px 12px 0; flex: none; object-fit: cover; border-radius: 6px; }
-/* A wide picture: under the text, whole, at most 360px wide (Slack's size). */
-.slack-link-card[data-wide-image] { flex-direction: column; }
+/* A wide picture (most og:images are 1200×630) stays on the right, as
+   before, but whole: a fixed width with its own height, so nothing is cut
+   off. The card grows to fit it when the text is shorter. */
 .slack-link-card[data-wide-image] .slack-link-card-image {
-  width: auto; height: auto; max-width: min(360px, calc(100% - 32px)); max-height: 240px;
-  margin: 0 16px 12px; object-fit: contain; align-self: flex-start;
+  width: ${LINK_PREVIEW_IMAGE_WIDTH}px; height: auto; max-width: 40%;
+  align-self: center; object-fit: contain;
+  margin: 12px 12px 12px 0;
   border: 1px solid color-mix(in srgb, var(--text-standard) 8%, transparent);
 }
 /* Attached files sit under the text in the message box, as in Slack
@@ -3545,6 +3547,8 @@ function undoSend(ctx) {
 const LINK_PREVIEWS = true;
 const LINK_PREVIEW_MAX_IMAGE = 5 * 1024 * 1024;
 const LINK_PREVIEW_HOPS = 4;
+// Width (px) of a wide picture on the right of a link card; its height follows.
+const LINK_PREVIEW_IMAGE_WIDTH = 200;
 
 function linkPreviewCards(ctx) {
   const conversation = ctx.conversation;
@@ -3608,8 +3612,8 @@ function linkPreviewCards(ctx) {
     if (!images.has(url)) images.set(url, readImage(url).catch(() => null).then((blob) => blob || url));
     return images.get(url);
   };
-  // A wide picture (most og:images are 1200×630) goes under the text at its
-  // own shape, as in Slack; a square-ish one stays a thumbnail on the right.
+  // A wide picture (most og:images are 1200×630) is shown whole on the right;
+  // a square-ish one is an 80px thumbnail there.
   const shapeCard = (img) => {
     const card = img.closest(".slack-link-card");
     if (!card || !img.naturalWidth || !img.naturalHeight) return;
