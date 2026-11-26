@@ -4566,12 +4566,15 @@ function forumCards(ctx) {
   const relay = ctx.relay;
   // Buzz marks a channel's message list with its id; forum ids come from the
   // channel list, so the cards follow channels being added or changed.
+  const POST_ROW = "[data-message-id]:not([data-membership-row]) > [data-highlight-surface]";
   const forumTimelines = (ids) => ids.map((id) => `[data-channel-timeline=${JSON.stringify(id)}]`).join(", ");
   const css = (ids) => {
     if (!ids.length) return "";
     const F = `:is(${forumTimelines(ids)})`;
-    // Doubled attribute: outranks the general message spacing rules above.
-    const ROW = `${F} [data-highlight-surface][data-highlight-surface]`;
+    // Only post rows: join/leave notes and agent-addressed entries also carry
+    // data-highlight-surface. The doubled attribute outranks the general
+    // message spacing rules above.
+    const ROW = `${F} ${POST_ROW}[data-highlight-surface]`;
     const line = "color-mix(in srgb, var(--text-standard) 13%, transparent)";
     return `
 /* Forum channels: every post is its own card. */
@@ -4590,12 +4593,13 @@ ${ROW}:hover, ${ROW}[data-thread-open] {
   border-color: color-mix(in srgb, var(--text-standard) 26%, transparent) !important;
 }
 /* Buzz's row hover paint fills the card instead of a full-width band. */
-${ROW}::before {
+${ROW}::before, ${ROW}::after {
   inset: 0 !important;
   border-radius: 12px !important;
 }
 /* Posts by the same person a few minutes apart are separate cards too:
-   show the name and time Buzz hides on a follow-up line. */
+   show the name Buzz hides on a follow-up line, and its time in the
+   picture column (Buzz draws no picture there). */
 ${ROW}[data-stack-previous] [data-copy-author] {
   position: static !important;
   width: auto !important;
@@ -4607,7 +4611,7 @@ ${ROW}[data-stack-previous] [data-copy-author] {
   white-space: normal !important;
   user-select: auto !important;
 }
-${ROW}[data-stack-previous] [class*="_continuationTime_"] { display: none !important; }
+${ROW}[data-stack-previous] [class*="_continuationTime_"] { opacity: 1 !important; }
 /* Reply count under the post. */
 ${ROW} [data-thread-summary] { margin-top: 6px !important; }
 `;
@@ -4626,13 +4630,14 @@ ${ROW} [data-thread-summary] { margin-top: 6px !important; }
 
   // Clicking a card (not a link, button, picture or selected text) opens its
   // replies: the "N replies" line if it has one, otherwise its Reply button.
-  const SKIP = 'a, button, [role="button"], input, textarea, select, summary, label, video, audio, img, [contenteditable="true"], [data-preview-card-trigger], [role="group"], [role="menu"], [role="dialog"]';
+  const SKIP = 'a, button, [role="button"], input, textarea, select, summary, label, video, audio, img, [contenteditable="true"], pre, code, table, [data-preview-card-trigger], [role="group"], [role="menu"], [role="dialog"]';
   const onClick = (event) => {
     if (!ids.length || event.button !== 0 || event.defaultPrevented) return;
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     const target = event.target;
     if (!(target instanceof Element) || target.closest(SKIP)) return;
     const row = target.closest("[data-highlight-surface]");
+    if (!row?.matches(POST_ROW)) return;
     const timeline = row?.closest("[data-channel-timeline]");
     if (!row || !timeline || !ids.includes(timeline.getAttribute("data-channel-timeline"))) return;
     const selection = document.getSelection?.();
