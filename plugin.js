@@ -783,6 +783,10 @@ ${SIDEBAR} [data-dm-participant-count] {
    picture or count square beside them reads as high; lower it by 1px to line
    up with the name (measured from a screenshot). */
 ${SIDEBAR} [data-channel-sidebar-row] [data-dm-identity] { transform: translateY(${DM_IDENTITY_NUDGE}px); }
+/* The muted bell after a name sits 1px above the name too (measured). */
+${SIDEBAR} [data-channel-sidebar-row] [role="img"][aria-label="Muted"] {
+  display: inline-flex; transform: translateY(${DM_IDENTITY_NUDGE}px);
+}
 ${SIDEBAR} [data-dm-identity] .buzz-avatar { -webkit-mask: none !important; mask: none !important; }
 ${SIDEBAR} [data-dm-identity] .buzz-avatar-status-dot { box-shadow: 0 0 0 2px ${c.sidebar}; }
 ${SIDEBAR} [data-dm-identity],
