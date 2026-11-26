@@ -1709,8 +1709,8 @@ ${SLACK_MENUS ? `
   order: 1;
   margin-block: 2px 0 !important;
 }
-/* An attached picture or video: Slack's rounded square (76px, 10px plain
-   round corners, a thin border). */
+/* An attached picture or video: Slack's rounded square (60px, 8px plain
+   round corners, a thin border) instead of Buzz's 76px tile. */
 [data-composer-surface] section[aria-label="Attachments"] li[data-media] {
   width: ${ATTACHMENT_THUMB}px !important;
   height: ${ATTACHMENT_THUMB}px !important;
@@ -3422,10 +3422,10 @@ function dmSectionMenu(ctx) {
 // that box, until you type or send something else there. Messages with files
 // are left alone, since the files cannot be put back.
 // Size (px) of an attached picture's square in the message box. Measured
-// side by side with Slack at the same window size: about 76.
-const ATTACHMENT_THUMB = 76;
-// Corner radius (px) of that square (Slack: about 10, plain round corners).
-const ATTACHMENT_RADIUS = 10;
+// side by side with Slack at the same window size: 60.
+const ATTACHMENT_THUMB = 60;
+// Corner radius (px) of that square (Slack: about 8, plain round corners).
+const ATTACHMENT_RADIUS = 8;
 
 const UNDO_SEND = true;
 const UNDO_SEND_WINDOW_MS = 5 * 60 * 1000;
