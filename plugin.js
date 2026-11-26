@@ -310,6 +310,8 @@ const SIZES = {
 // radius in px (Slack: a 20px rounded square; Buzz: a larger circle).
 const DM_AVATAR = 20;
 const DM_AVATAR_RADIUS = 5;
+// Vertical nudge (px) of that picture so it lines up with the name.
+const DM_IDENTITY_NUDGE = 1;
 
 // Message avatars: corner radius in px (Slack ~8; a large number = circle).
 const AVATAR_RADIUS = 8;
@@ -777,6 +779,10 @@ ${SIDEBAR} [data-dm-participant-count] {
   padding: 0 !important;
   font-variant-numeric: tabular-nums;
 }
+/* Korean names in this font sit about 1.5px below the row's centre, so the
+   picture or count square beside them reads as high; lower it by 1px to line
+   up with the name (measured from a screenshot). */
+${SIDEBAR} [data-channel-sidebar-row] [data-dm-identity] { transform: translateY(${DM_IDENTITY_NUDGE}px); }
 ${SIDEBAR} [data-dm-identity] .buzz-avatar { -webkit-mask: none !important; mask: none !important; }
 ${SIDEBAR} [data-dm-identity] .buzz-avatar-status-dot { box-shadow: 0 0 0 2px ${c.sidebar}; }
 ${SIDEBAR} [data-dm-identity],
