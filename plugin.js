@@ -1741,6 +1741,21 @@ ${SIDEBAR} [data-channel-priority] {
   background: ${MENTION_DOT} !important;
   box-shadow: none !important;
 }
+/* A DM with unread messages shows their number in a red pill, as in Slack,
+   instead of Buzz's dot. Buzz keeps the number only in a hidden label;
+   dmUnreadCounts copies it into data-slack-count. */
+${SIDEBAR} [data-channel-unread][data-slack-count] {
+  position: static !important;
+  width: auto !important; height: 18px !important;
+  min-width: 20px; padding: 0 6px !important; margin: 0 0 0 auto !important;
+  clip: auto !important; overflow: visible !important;
+  border-radius: 9px; corner-shape: round;
+  display: inline-flex !important; align-items: center; justify-content: center; flex: none;
+  background: ${MENTION_DOT} !important; color: #fff !important;
+  font-size: 12px; font-weight: 700; line-height: 1;
+}
+${SIDEBAR} [data-channel-unread][data-slack-count]::after { content: attr(data-slack-count); }
+${SIDEBAR} [data-channel-sidebar-row]:has([data-slack-count]) [data-channel-priority] { display: none !important; }
 
 /* Presence on sidebar pictures, as in Slack's DM list: a small dot at the
    bottom-right corner ringed in the sidebar color; green when active, a
@@ -3137,6 +3152,41 @@ function hiddenDmRows(ctx) {
       stopRelay?.();
       stopIncoming?.();
       style.remove();
+    };
+  });
+}
+
+// Slack shows how many messages a DM has unread; Buzz shows a dot and keeps
+// the number in the row's hidden label ("3 observed unread messages…").
+// Muted DMs and ones marked unread by hand (no number) keep Buzz's look.
+function dmUnreadCounts(ctx) {
+  const COUNT = /^(\d+) observed unread messages/;
+  const sync = () => {
+    for (const mark of document.querySelectorAll("[data-channel-sidebar-row] [data-channel-unread]")) {
+      const row = mark.closest("[data-channel-sidebar-row]");
+      const dm = !!row?.querySelector("[data-dm-identity], [data-dm-participant-count]");
+      const n = dm && !mark.hasAttribute("data-channel-muted") ? Number(COUNT.exec(mark.getAttribute("aria-label") || "")?.[1]) : 0;
+      const want = n > 0 ? (n > 99 ? "99+" : String(n)) : null;
+      if (mark.getAttribute("data-slack-count") === want) continue;
+      if (want) mark.setAttribute("data-slack-count", want);
+      else mark.removeAttribute("data-slack-count");
+    }
+  };
+  ctx.effect(() => {
+    let queued = false;
+    const observer = new MutationObserver(() => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        sync();
+      });
+    });
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["aria-label", "data-channel-muted"] });
+    sync();
+    return () => {
+      observer.disconnect();
+      document.querySelectorAll("[data-slack-count]").forEach((el) => el.removeAttribute("data-slack-count"));
     };
   });
 }
@@ -4690,6 +4740,7 @@ export function apply(ctx) {
   addChannelNotifyMenu(ctx);
   groupDmMentionGate(ctx);
   hiddenDmRows(ctx);
+  dmUnreadCounts(ctx);
   dmSectionMenu(ctx);
   linkPreviewCards(ctx);
   forumCards(ctx);
