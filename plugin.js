@@ -1854,11 +1854,17 @@ ${SIDEBAR} [data-channel-sidebar-row][data-slack-draft]:not([data-selected]) [cl
 [data-message-reactions] [class*="_reactionItem_"][data-mine] { box-shadow: inset 0 0 0 1px ${REACTION.mineRing}; }
 [data-message-reactions] [class*="_reactionItem_"]:hover,
 [data-message-reactions][class*="_inlineReactionTool_"]:hover { box-shadow: inset 0 0 0 1px ${REACTION.hoverRing}; }
+/* Buzz sizes these as fixed square controls; Slack's pill grows with its
+   emoji and count. */
 [data-message-reactions] [class*="_reactionItem_"] button,
 [data-message-reactions][class*="_inlineReactionTool_"] button {
+  width: auto !important; min-width: 0 !important; max-width: none !important;
   height: 24px !important; min-height: 24px !important; padding: 0 8px !important; border-radius: 12px !important;
-  background: transparent !important;
+  display: inline-flex !important; align-items: center !important; justify-content: center !important;
+  background: transparent !important; overflow: visible !important;
 }
+[data-message-reactions] [class*="_reactionGlyph_"] { display: inline-flex !important; align-items: center; }
+[data-message-reactions] [class*="_reactionGlyph_"] [class*="_reactionNativeEmoji_"] { padding: 0 !important; line-height: 1 !important; }
 [data-message-reactions][class*="_inlineReactionTool_"] button { padding: 0 6px !important; min-width: 32px !important; }
 [data-message-reactions] [class*="_reactionCount_"] { font-size: 12px !important; font-weight: 700; }
 /* Buzz shows a count only when several people reacted; Slack always does,
