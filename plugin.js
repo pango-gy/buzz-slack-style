@@ -1974,6 +1974,11 @@ ${Object.entries(FILE_TOOL_ICONS).map(([name, d]) => {
   background: transparent; color: #fff !important; cursor: pointer;
 }
 .slack-file-viewer-button:hover { background: rgba(255, 255, 255, 0.12); }
+.slack-file-viewer-close::before {
+  content: ""; width: 18px; height: 18px; display: block; background: #fff;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6 6 18'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6 6 18'/%3E%3C/svg%3E") center / contain no-repeat;
+}
 .slack-file-viewer-body {
   flex: 1; min-height: 0; margin: 0; border-radius: 0; overflow: hidden;
   background: #fff; color: #1D1C1D; display: flex; align-items: center; justify-content: center;
@@ -3986,7 +3991,9 @@ function filePreviews(ctx) {
     close.className = "slack-file-viewer-button";
     close.title = t("닫기", "Close");
     close.setAttribute("aria-label", t("닫기", "Close"));
-    close.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+    // Its X is drawn by CSS (::before mask): an SVG inside a <button> was
+    // shrunk to a dot by the app's button styles.
+    close.classList.add("slack-file-viewer-close");
     close.addEventListener("click", closeViewer);
     bar.append(title, download, close);
     const body = document.createElement("div");
