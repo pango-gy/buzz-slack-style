@@ -766,6 +766,17 @@ ${SIDEBAR} [data-dm-identity] {
 }
 /* Buzz cuts the picture into a circle with a mask; drop it so the corners
    show, and ring the status dot in the sidebar color instead. */
+/* A group DM's square shows how many others are in it. Buzz centres the
+   number with line-height, which sits a pixel low in the 20px square;
+   centre it as a box instead. */
+${SIDEBAR} [data-dm-participant-count] {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1 !important;
+  padding: 0 !important;
+  font-variant-numeric: tabular-nums;
+}
 ${SIDEBAR} [data-dm-identity] .buzz-avatar { -webkit-mask: none !important; mask: none !important; }
 ${SIDEBAR} [data-dm-identity] .buzz-avatar-status-dot { box-shadow: 0 0 0 2px ${c.sidebar}; }
 ${SIDEBAR} [data-dm-identity],
