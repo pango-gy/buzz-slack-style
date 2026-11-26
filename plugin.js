@@ -1735,7 +1735,7 @@ ${SLACK_MENUS ? `
   min-height: 62px !important;
   background: ${FILE_CARD_BG} !important;
   border: 1px solid ${FILE_CARD_BORDER} !important;
-  border-radius: 12px !important; corner-shape: round !important;
+  border-radius: ${FILE_CARD_RADIUS}px !important; corner-shape: round !important;
   box-shadow: none !important;
 }
 :root[data-color-mode="dark"] :is([class*="_filePreviewAttachment_"], [class*="_fileAttachment_"]),
@@ -1743,19 +1743,39 @@ ${SLACK_MENUS ? `
   background: ${FILE_CARD_BG_DARK} !important;
   border-color: rgba(255, 255, 255, 0.14) !important;
 }
-/* Buzz's row hover and press fills stay off the card; it stays white. */
-:is([class*="_filePreviewMain_"] > *, [class*="_fileAttachment_"]):is(:hover, :active) { background: transparent !important; }
+/* Buzz paints the card's inside (a navigation row) grey, partly through
+   ::before; all of that stays off so the card is white, as in Slack. */
+[class*="_filePreviewMain_"] *:not([data-kind]):not([data-kind] *),
+[class*="_filePreviewMain_"] *:not([data-kind])::before,
+[class*="_filePreviewMain_"] *:not([data-kind])::after,
+[class*="_fileAttachment_"]:is(:hover, :active) {
+  background: transparent !important; background-color: transparent !important;
+}
+[class*="_filePreviewMain_"] *:not([data-kind])::before { opacity: 0 !important; }
+/* Slack: 8px between cards. */
+[class*="_fileGroup_"] { gap: ${FILE_CARD_GAP}px !important; }
+/* "N개의 첨부 파일 ▾  ⤓ 모두 다운로드" above two or more files (fileGroupHeaders). */
+.slack-file-header { display: flex; align-items: center; gap: 12px; margin: 4px 0 6px; font-size: 13px; color: var(--text-subtle); }
+.slack-file-header button {
+  display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none;
+  color: inherit; font: inherit; cursor: pointer;
+}
+.slack-file-header button:hover { color: var(--text-standard); text-decoration: underline; }
+.slack-file-header .slack-file-caret { transition: transform 120ms ease; }
+.slack-file-header[data-collapsed] .slack-file-caret { transform: rotate(-90deg); }
+.slack-file-header .slack-file-sep { width: 1px; height: 12px; background: color-mix(in srgb, var(--text-standard) 20%, transparent); }
+[class*="_fileGroup_"][data-slack-collapsed] { display: none !important; }
 [class*="_fileAttachment_"], [data-composer-surface] section[aria-label="Attachments"] li:not([data-media]):not([data-voice-draft]) {
   padding: 12px !important; gap: 12px !important;
 }
 :is([class*="_filePreviewAttachment_"], [class*="_fileAttachment_"]) { width: ${FILE_CARD_WIDTH}px !important; }
-[data-composer-surface] section[aria-label="Attachments"] li:not([data-media]):not([data-voice-draft]) { width: ${COMPOSER_FILE_WIDTH}px !important; }
+[data-composer-surface] section[aria-label="Attachments"] li:not([data-media]):not([data-voice-draft]) { width: ${COMPOSER_FILE_WIDTH}px !important; border-radius: 12px !important; }
 [class*="_filePreviewAttachment_"] { position: relative; }
 /* Hover: Slack darkens the border to mid grey. */
 :is([class*="_filePreviewAttachment_"], [class*="_fileAttachment_"]):hover { border-color: ${FILE_CARD_BORDER_HOVER} !important; }
 [class*="_filePreviewMain_"] > * {
-  min-height: 60px !important; padding: 12px !important; gap: 12px !important;
-  border-radius: 12px !important; background: transparent !important;
+  min-height: 65px !important; padding: 12px !important; gap: 12px !important;
+  border-radius: ${FILE_CARD_RADIUS}px !important; background: transparent !important;
 }
 /* The whole card opens the preview; the download button only shows on hover. */
 /* The download button shows on hover as Slack's small floating toolbar: a
@@ -3564,8 +3584,11 @@ function dmSectionMenu(ctx) {
 // the box to edit and send again. It works for the last message sent from
 // that box, until you type or send something else there. Messages with files
 // are left alone, since the files cannot be put back.
-// Width (px) of a file card in messages and in the message box (Slack: ~326).
-const FILE_CARD_WIDTH = 326;
+// Width (px) of a file card in messages (measured from Slack: 328).
+const FILE_CARD_WIDTH = 328;
+// Corner radius and gap (px) of file cards in messages (measured from Slack).
+const FILE_CARD_RADIUS = 8;
+const FILE_CARD_GAP = 8;
 // Width (px) of a file chip in the message box (Slack: ~234).
 const COMPOSER_FILE_WIDTH = 234;
 // File card colours: white with a light grey border, mid grey on hover (Slack).
@@ -3818,6 +3841,72 @@ function filePreviews(ctx) {
     order: 100,
     matches: (attachment) => !!kindOf(attachment),
     component: SlackFileCard,
+  });
+}
+
+// Above two or more files in a message, Slack shows "2개의 첨부 파일 ▾" (folds
+// and unfolds them) and "모두 다운로드" (downloads each one). Buzz shows only
+// the cards, so this adds that line before each group of cards.
+function fileGroupHeaders(ctx) {
+  const CARD = ':scope > [class*="_filePreviewAttachment_"], :scope > [class*="_fileAttachment_"], :scope > * > [class*="_filePreviewAttachment_"], :scope > * > [class*="_fileAttachment_"]';
+  const caret = '<svg class="slack-file-caret" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M5 8h14l-7 9z"/></svg>';
+  const cloud = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 8a4 4 0 0 1 0 8M12 11v9m0 0-3-3m3 3 3-3"/></svg>';
+  const downloadOne = (card) => {
+    const button = card.querySelector('[class*="_fileDownloadAction_"] :is(button, a)');
+    if (button) button.click();
+    else if (card.matches("a, button")) card.click();
+  };
+  const sync = () => {
+    for (const group of document.querySelectorAll('[data-highlight-surface] [class*="_fileGroup_"]')) {
+      const cards = [...group.querySelectorAll(CARD)];
+      const header = group.previousElementSibling?.classList.contains("slack-file-header") ? group.previousElementSibling : null;
+      if (cards.length < 2) {
+        header?.remove();
+        continue;
+      }
+      const label = t(`${cards.length}개의 첨부 파일`, `${cards.length} files`);
+      if (header) {
+        const text = header.querySelector(".slack-file-count-label");
+        if (text && text.textContent !== label) text.textContent = label;
+        continue;
+      }
+      const line = document.createElement("div");
+      line.className = "slack-file-header";
+      line.innerHTML =
+        `<button type="button" class="slack-file-toggle" aria-expanded="true"><span class="slack-file-count-label"></span>${caret}</button>` +
+        `<span class="slack-file-sep" aria-hidden="true"></span>` +
+        `<button type="button" class="slack-file-all">${cloud}<span>${t("모두 다운로드", "Download all")}</span></button>`;
+      line.querySelector(".slack-file-count-label").textContent = label;
+      line.querySelector(".slack-file-toggle").addEventListener("click", (event) => {
+        const folded = !group.hasAttribute("data-slack-collapsed");
+        group.toggleAttribute("data-slack-collapsed", folded);
+        line.toggleAttribute("data-collapsed", folded);
+        event.currentTarget.setAttribute("aria-expanded", String(!folded));
+      });
+      line.querySelector(".slack-file-all").addEventListener("click", () => {
+        // One at a time, so the browser does not drop downloads started together.
+        [...group.querySelectorAll(CARD)].forEach((card, i) => setTimeout(() => downloadOne(card), i * 400));
+      });
+      group.before(line);
+    }
+  };
+  ctx.effect(() => {
+    let queued = false;
+    const observer = new MutationObserver(() => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        sync();
+      });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    sync();
+    return () => {
+      observer.disconnect();
+      document.querySelectorAll(".slack-file-header").forEach((el) => el.remove());
+      document.querySelectorAll("[data-slack-collapsed]").forEach((el) => el.removeAttribute("data-slack-collapsed"));
+    };
   });
 }
 
@@ -5208,6 +5297,7 @@ export function apply(ctx) {
   undoSend(ctx);
   filePreviews(ctx);
   composerFileTypes(ctx);
+  fileGroupHeaders(ctx);
   addFormatBars(ctx);
   addDockNewButton(ctx);
   addChannelTabs(ctx);
