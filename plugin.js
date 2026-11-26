@@ -1828,6 +1828,47 @@ ${Object.entries(FILE_KIND_COLORS).map(([kind, color]) => `:is([class*="_filePre
 [data-composer-surface] section[aria-label="Attachments"] li:not([data-media]) [class*="_actions_"] { z-index: 1; }
 [data-composer-surface] section[aria-label="Attachments"] li:not([data-media]):hover { background: color-mix(in srgb, var(--text-standard) 3%, var(--surface-composer, #fff)) !important; }
 
+/* The pencil on a sidebar row with an unsent message (draftMarks), at the
+   row's right end; hidden while you are in that conversation, as in Slack. */
+${SIDEBAR} [data-channel-sidebar-row] { position: relative; }
+${SIDEBAR} [data-channel-sidebar-row][data-slack-draft]:not([data-selected])::after {
+  content: ""; position: absolute; right: 10px; top: 50%; width: 14px; height: 14px; transform: translateY(-50%);
+  background: currentColor; opacity: 0.8; pointer-events: none;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+${SIDEBAR} [data-channel-sidebar-row][data-slack-draft]:not([data-selected]) [class*="navigation-item-label"] { padding-right: 22px; }
+
+/* Reactions under a message, as in Slack: 24px pills with 12px corners, light
+   grey; yours light blue with a blue ring and a blue count. The add-reaction
+   button is the same grey pill. */
+[data-message-reactions] [class*="_reactionItem_"],
+[data-message-reactions][class*="_inlineReactionTool_"] {
+  --reaction-surface: ${REACTION.bg};
+  --reaction-self-surface: ${REACTION.mineBg};
+  --reaction-self-ink: ${REACTION.mineInk};
+  --reaction-ink: var(--text-standard);
+  border-radius: 12px !important; corner-shape: round !important;
+  box-shadow: inset 0 0 0 1px transparent;
+}
+[data-message-reactions] [class*="_reactionItem_"][data-mine] { box-shadow: inset 0 0 0 1px ${REACTION.mineRing}; }
+[data-message-reactions] [class*="_reactionItem_"]:hover,
+[data-message-reactions][class*="_inlineReactionTool_"]:hover { box-shadow: inset 0 0 0 1px ${REACTION.hoverRing}; }
+[data-message-reactions] [class*="_reactionItem_"] button,
+[data-message-reactions][class*="_inlineReactionTool_"] button {
+  height: 24px !important; min-height: 24px !important; padding: 0 8px !important; border-radius: 12px !important;
+  background: transparent !important;
+}
+[data-message-reactions][class*="_inlineReactionTool_"] button { padding: 0 6px !important; min-width: 32px !important; }
+[data-message-reactions] [class*="_reactionCount_"] { font-size: 12px !important; font-weight: 700; }
+[data-message-reactions] [class*="_reactionItem_"][data-mine] [class*="_reactionCount_"] { color: ${REACTION.mineInk}; }
+[data-message-reactions] [class*="_reactionNativeEmoji_"] { font-size: 16px !important; max-width: none !important; }
+[data-message-reactions] :is([class*="_reactionCustomEmoji_"], [class*="_reactionPlaceholder_"]) { width: 16px !important; height: 16px !important; scale: 1 !important; }
+:root[data-color-mode="dark"] [data-message-reactions] :is([class*="_reactionItem_"], [class*="_inlineReactionTool_"]) {
+  --reaction-surface: rgba(255, 255, 255, 0.08);
+  --reaction-self-surface: rgba(29, 155, 209, 0.2);
+}
+
 /* Slack's toolbar over a hovered file card (this plugin's cards): a white
    pill of 32px buttons with dark tooltips; it replaces Buzz's own download
    button there. */
@@ -1848,6 +1889,11 @@ ${Object.entries(FILE_KIND_COLORS).map(([kind, color]) => `:is([class*="_filePre
   color: var(--text-standard); cursor: pointer;
 }
 .slack-file-tool:hover { background: color-mix(in srgb, var(--text-standard) 8%, transparent); }
+.slack-file-tool-icon {
+  width: 18px; height: 18px; display: block; background: var(--text-standard, #1D1C1D);
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-size: contain; mask-size: contain;
+  -webkit-mask-position: center; mask-position: center;
+}
 .slack-file-tool[data-tip]:hover::after {
   content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
   padding: 5px 9px; border-radius: 6px; background: #1D1C1D; color: #fff;
@@ -1865,10 +1911,14 @@ ${Object.entries(FILE_KIND_COLORS).map(([kind, color]) => `:is([class*="_filePre
 :root[data-color-mode="dark"] :is(.slack-file-tools, .slack-file-details) { background: ${FILE_CARD_BG_DARK}; border-color: rgba(255, 255, 255, 0.14); }
 
 /* The file viewer: Slack's full-window dark frame with the page inside. */
+/* Slightly smaller than the window, as in Slack: the app shows dimmed around
+   it, the frame has rounded corners and the page fills it under the bar. */
 .slack-file-viewer {
-  position: fixed; inset: 0; z-index: var(--layer-popover, 1000);
-  display: flex; flex-direction: column;
-  background: rgba(26, 29, 33, 0.96); color: #fff;
+  position: fixed; inset: 40px 14px 14px; z-index: var(--layer-popover, 1000);
+  display: flex; flex-direction: column; overflow: hidden;
+  border-radius: 10px; corner-shape: round;
+  background: #1A1D21; color: #fff;
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.45), 0 12px 40px rgba(0, 0, 0, 0.35);
 }
 .slack-file-viewer-bar { display: flex; align-items: center; gap: 8px; padding: 10px 16px; min-height: 52px; }
 .slack-file-viewer-title { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 13px; line-height: 18px; }
@@ -1881,7 +1931,7 @@ ${Object.entries(FILE_KIND_COLORS).map(([kind, color]) => `:is([class*="_filePre
 }
 .slack-file-viewer-button:hover { background: rgba(255, 255, 255, 0.12); }
 .slack-file-viewer-body {
-  flex: 1; min-height: 0; margin: 0 16px 16px; border-radius: 8px; overflow: hidden;
+  flex: 1; min-height: 0; margin: 0; border-radius: 0; overflow: hidden;
   background: #fff; color: #1D1C1D; display: flex; align-items: center; justify-content: center;
   font-size: 15px;
 }
@@ -3390,7 +3440,7 @@ function hiddenDmRows(ctx) {
     const ids = scope ? [...slackHiddenDms.read(scope)] : [];
     const esc = (id) => (typeof CSS !== "undefined" && CSS.escape ? CSS.escape(id) : id);
     const css = ids.length
-      ? `${ids.map((id) => `[data-channel-sidebar-row]:not([data-selected]):has(button[data-channel-id="${esc(id)}"])`).join(",\n")} { display: none !important; }`
+      ? `${ids.map((id) => `[data-channel-sidebar-row]:not([data-selected]):not([data-slack-draft]):has(button[data-channel-id="${esc(id)}"])`).join(",\n")} { display: none !important; }`
       : "";
     if (style.textContent !== css) style.textContent = css;
   };
@@ -3465,6 +3515,91 @@ function dmUnreadCounts(ctx) {
     return () => {
       observer.disconnect();
       document.querySelectorAll("[data-slack-count]").forEach((el) => el.removeAttribute("data-slack-count"));
+    };
+  });
+}
+
+// Slack marks a conversation with a pencil in the sidebar when you left an
+// unsent message in it; Buzz shows nothing. Drafts are saved per community
+// under buzz-view.v1:[scope,"draft:<channel>"], checked here every couple of
+// seconds (writes in this window raise no event). The pencil shows only when
+// you are not in that conversation, and a hidden DM with a draft shows too.
+const DRAFT_MARKS = true;
+const DRAFT_SCAN_MS = 1500;
+
+function draftHasContent(value) {
+  if (typeof value === "string") return !!value.trim();
+  if (!value || typeof value !== "object") return false;
+  if (value.forward || value.chatCards?.length || value.gifs?.length) return true;
+  if (typeof value.text === "string" && value.text.trim()) return true;
+  // The editor snapshot: any text node with something in it.
+  let found = false;
+  const walk = (node, depth) => {
+    if (found || !node || typeof node !== "object" || depth > 40) return;
+    if (typeof node.text === "string" && node.text.trim() && node.type === "text") found = true;
+    if (Array.isArray(node.content)) node.content.forEach((child) => walk(child, depth + 1));
+    else if (node.content && typeof node.content === "object") walk(node.content, depth + 1);
+  };
+  walk(value.document, 0);
+  return found;
+}
+
+function draftMarks(ctx) {
+  const relay = ctx.relay;
+  if (!DRAFT_MARKS || !relay?.snapshot) return;
+  let last = "";
+  const scan = () => {
+    const snap = relay.snapshot();
+    const scope = snap?.status === "ready" && typeof snap.session?.scope === "string" ? snap.session.scope : "";
+    const ids = new Set();
+    if (scope) {
+      const prefix = "buzz-view.v1:";
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (!key?.startsWith(prefix)) continue;
+          let pair;
+          try {
+            pair = JSON.parse(key.slice(prefix.length));
+          } catch {
+            continue;
+          }
+          if (!Array.isArray(pair) || pair[0] !== scope || typeof pair[1] !== "string") continue;
+          const match = /^draft:([^:]+)$/.exec(pair[1]);
+          if (!match) continue;
+          const raw = localStorage.getItem(key);
+          if (!raw || raw.length > 500000) continue;
+          try {
+            if (draftHasContent(JSON.parse(raw))) ids.add(match[1]);
+          } catch {}
+        }
+      } catch {}
+    }
+    for (const row of document.querySelectorAll("[data-channel-sidebar-row]")) {
+      const id = row.querySelector("button[data-channel-id]")?.getAttribute("data-channel-id");
+      const want = !!id && ids.has(id);
+      if (row.hasAttribute("data-slack-draft") !== want) row.toggleAttribute("data-slack-draft", want);
+    }
+    const now = [...ids].sort().join(",");
+    if (now !== last) last = now;
+  };
+  ctx.effect(() => {
+    const timer = setInterval(scan, DRAFT_SCAN_MS);
+    let queued = false;
+    const observer = new MutationObserver(() => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        scan();
+      });
+    });
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-selected"] });
+    scan();
+    return () => {
+      clearInterval(timer);
+      observer.disconnect();
+      document.querySelectorAll("[data-slack-draft]").forEach((el) => el.removeAttribute("data-slack-draft"));
     };
   });
 }
@@ -3622,6 +3757,9 @@ const FILE_CARD_WIDTH = 328;
 // the border runs straight from 8px in, which a 12px round corner gives).
 const FILE_CARD_RADIUS = 12;
 const FILE_CARD_GAP = 8;
+// Reaction pills under messages (Slack's colours).
+const REACTION = { bg: "rgba(29, 28, 29, 0.06)", mineBg: "rgba(29, 155, 209, 0.1)", mineRing: "#1D9BD1", mineInk: "#1264A3", hoverRing: "rgba(29, 28, 29, 0.3)" };
+
 // Width (px) of a file chip in the message box (Slack: ~234).
 const COMPOSER_FILE_WIDTH = 234;
 // File card colours: white with a light grey border, mid grey on hover (Slack).
@@ -3854,8 +3992,12 @@ function filePreviews(ctx) {
     share: "M14 6l6 6-6 6M20 12H9a5 5 0 0 0-5 5v1",
     info: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v5M12 8h.01",
   };
-  const icon = (d) =>
-    h("svg", { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" }, h("path", { d }));
+  // Drawn as masks over a solid colour rather than inline SVG, which Buzz's
+  // message styles left invisible here.
+  const icon = (d) => {
+    const url = `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='${d}'/></svg>`)}")`;
+    return h("span", { className: "slack-file-tool-icon", "aria-hidden": "true", style: { WebkitMaskImage: url, maskImage: url } });
+  };
   const formatSize = (bytes) =>
     !Number.isFinite(bytes) ? "" : bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(bytes < 10240 ? 1 : 0)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   const formatTime = (secs) => {
@@ -5388,6 +5530,7 @@ export function apply(ctx) {
   addChannelNotifyMenu(ctx);
   groupDmMentionGate(ctx);
   hiddenDmRows(ctx);
+  draftMarks(ctx);
   dmUnreadCounts(ctx);
   dmSectionMenu(ctx);
   linkPreviewCards(ctx);
