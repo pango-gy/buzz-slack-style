@@ -1680,14 +1680,14 @@ ${SLACK_MENUS ? `
    title, description and site, and the page's picture on the right. */
 .slack-link-card {
   display: flex; align-items: stretch;
-  width: 560px; max-width: 100%; min-height: 0;
+  width: ${LINK_PREVIEW_WIDTH}px; max-width: 100%; min-height: 0;
   border: 1px solid color-mix(in srgb, var(--text-standard) 13%, transparent);
   border-radius: 8px; corner-shape: round; overflow: hidden;
   background: var(--surface-panel, transparent);
   color: var(--text-standard) !important; text-decoration: none !important;
   margin-top: 4px;
 }
-.slack-link-card-bare { width: 560px; max-width: 100%; }
+.slack-link-card-bare { width: ${LINK_PREVIEW_WIDTH}px; max-width: 100%; }
 .slack-link-card-bare[hidden] { display: none !important; }
 .slack-link-card:hover { border-color: color-mix(in srgb, var(--text-standard) 25%, transparent); }
 .slack-link-card-text { flex: 1; min-width: 0; padding: 12px 16px; display: flex; flex-direction: column; gap: 4px; }
@@ -3549,6 +3549,8 @@ function undoSend(ctx) {
 const LINK_PREVIEWS = true;
 const LINK_PREVIEW_MAX_IMAGE = 5 * 1024 * 1024;
 const LINK_PREVIEW_HOPS = 4;
+// Width (px) of a link card; narrower conversations shrink it (Slack: ~720).
+const LINK_PREVIEW_WIDTH = 720;
 
 function linkPreviewCards(ctx) {
   const conversation = ctx.conversation;
