@@ -1733,39 +1733,61 @@ ${SLACK_MENUS ? `
 [data-composer-surface] section[aria-label="Attachments"] li:not([data-media]):not([data-voice-draft]) {
   width: ${FILE_CARD_WIDTH}px; max-width: 100% !important;
   min-height: 62px !important;
-  background: var(--surface-composer, #fff) !important;
-  border: 1px solid color-mix(in srgb, var(--text-standard) 12%, transparent) !important;
+  background: ${FILE_CARD_BG} !important;
+  border: 1px solid ${FILE_CARD_BORDER} !important;
   border-radius: 12px !important; corner-shape: round !important;
   box-shadow: none !important;
 }
+:root[data-color-mode="dark"] :is([class*="_filePreviewAttachment_"], [class*="_fileAttachment_"]),
+:root[data-color-mode="dark"] [data-composer-surface] section[aria-label="Attachments"] li:not([data-media]):not([data-voice-draft]) {
+  background: ${FILE_CARD_BG_DARK} !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+}
+/* Buzz's row hover and press fills stay off the card; it stays white. */
+:is([class*="_filePreviewMain_"] > *, [class*="_fileAttachment_"]):is(:hover, :active) { background: transparent !important; }
 [class*="_fileAttachment_"], [data-composer-surface] section[aria-label="Attachments"] li:not([data-media]):not([data-voice-draft]) {
   padding: 12px !important; gap: 12px !important;
 }
 :is([class*="_filePreviewAttachment_"], [class*="_fileAttachment_"]) { width: ${FILE_CARD_WIDTH}px !important; }
 [data-composer-surface] section[aria-label="Attachments"] li:not([data-media]):not([data-voice-draft]) { width: ${COMPOSER_FILE_WIDTH}px !important; }
 [class*="_filePreviewAttachment_"] { position: relative; }
-[class*="_filePreviewAttachment_"]:hover { border-color: color-mix(in srgb, var(--text-standard) 25%, transparent) !important; }
+/* Hover: Slack darkens the border to mid grey. */
+:is([class*="_filePreviewAttachment_"], [class*="_fileAttachment_"]):hover { border-color: ${FILE_CARD_BORDER_HOVER} !important; }
 [class*="_filePreviewMain_"] > * {
   min-height: 60px !important; padding: 12px !important; gap: 12px !important;
   border-radius: 12px !important; background: transparent !important;
 }
 /* The whole card opens the preview; the download button only shows on hover. */
+/* The download button shows on hover as Slack's small floating toolbar: a
+   white pill with a light border and shadow, 32px buttons. */
 [class*="_filePreviewAttachment_"] [class*="_fileDownloadAction_"] {
-  position: absolute; top: 50%; right: 8px; transform: translateY(-50%);
+  position: absolute; top: 50%; right: 12px; transform: translateY(-50%);
   opacity: 0; transition: opacity 120ms ease;
+  padding: 2px; border-radius: 8px; corner-shape: round;
+  background: ${FILE_CARD_BG};
+  border: 1px solid ${FILE_CARD_BORDER};
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
+:root[data-color-mode="dark"] [class*="_filePreviewAttachment_"] [class*="_fileDownloadAction_"] { background: ${FILE_CARD_BG_DARK}; border-color: rgba(255, 255, 255, 0.14); }
 [class*="_filePreviewAttachment_"]:is(:hover, :focus-within) [class*="_fileDownloadAction_"] { opacity: 1; }
 [class*="_filePreviewAttachment_"] [class*="_fileDownloadAction_"] > * {
-  background: var(--surface-composer, #fff) !important;
-  border: 1px solid color-mix(in srgb, var(--text-standard) 12%, transparent) !important;
-  border-radius: 8px !important;
+  width: 32px !important; height: 32px !important; min-height: 0 !important;
+  background: transparent !important; border: 0 !important; border-radius: 6px !important;
 }
+[class*="_filePreviewAttachment_"] [class*="_fileDownloadAction_"] > *:hover { background: color-mix(in srgb, var(--text-standard) 8%, transparent) !important; }
 :is([class*="_filePreviewAttachment_"], [class*="_fileAttachment_"], [data-composer-surface] section[aria-label="Attachments"]) [class*="_slot_"] {
   width: 36px !important; height: 36px !important; margin: 0 !important; border-radius: 8px !important;
 }
 :is([class*="_filePreviewAttachment_"], [class*="_fileAttachment_"], [data-composer-surface] section[aria-label="Attachments"]) [data-kind] {
   width: 36px !important; height: 36px !important; border-radius: 8px !important; corner-shape: round !important;
   color: #fff !important; background: ${FILE_KIND_COLORS.text} !important;
+}
+/* Code files get Slack's </> mark instead of Buzz's file-with-braces icon. */
+:is([class*="_filePreviewAttachment_"], [class*="_fileAttachment_"], [data-composer-surface] section[aria-label="Attachments"]) [data-kind="code"] svg { display: none !important; }
+:is([class*="_filePreviewAttachment_"], [class*="_fileAttachment_"], [data-composer-surface] section[aria-label="Attachments"]) [data-kind="code"]::before {
+  content: ""; width: 18px; height: 18px; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m8 7-5 5 5 5M16 7l5 5-5 5M14 4l-4 16'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 ${Object.entries(FILE_KIND_COLORS).map(([kind, color]) => `:is([class*="_filePreviewAttachment_"], [class*="_fileAttachment_"], [data-composer-surface] section[aria-label="Attachments"]) [data-kind="${kind}"] { background: ${color} !important; }`).join("\n")}
 :is([class*="_filePreviewAttachment_"], [class*="_fileAttachment_"]) [class*="_fileAttachmentName_"],
@@ -3546,6 +3568,11 @@ function dmSectionMenu(ctx) {
 const FILE_CARD_WIDTH = 326;
 // Width (px) of a file chip in the message box (Slack: ~234).
 const COMPOSER_FILE_WIDTH = 234;
+// File card colours: white with a light grey border, mid grey on hover (Slack).
+const FILE_CARD_BG = "#FFFFFF";
+const FILE_CARD_BG_DARK = "#1A1D21";
+const FILE_CARD_BORDER = "#E7E7E7";
+const FILE_CARD_BORDER_HOVER = "#ADADAE";
 // Colours of a file card's type square, by Buzz's file kind (Slack's palette).
 const FILE_KIND_COLORS = { code: "#CB512D", pdf: "#D93F3F", sheet: "#2BAC76", archive: "#616061", text: "#3C8DDE" };
 
@@ -3775,8 +3802,9 @@ function filePreviews(ctx) {
         return "";
       }
     })();
+    // Slack shows only the type ("HTML"), not the size.
     return h(FileCard, {
-      attachment,
+      attachment: { ...attachment, size: undefined },
       source,
       onOpenLink: () => false,
       typeLabel: (fileExtension(attachment.name) || "file").toUpperCase(),
