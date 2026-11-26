@@ -1911,11 +1911,13 @@ ${SIDEBAR} [data-channel-sidebar-row][data-slack-draft]:not([data-selected]) [cl
   color: var(--text-standard); cursor: pointer;
 }
 .slack-file-tool:hover { background: color-mix(in srgb, var(--text-standard) 8%, transparent); }
-.slack-file-tool-icon {
-  width: 18px; height: 18px; display: block; background: var(--text-standard, #1D1C1D);
-  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-size: contain; mask-size: contain;
-  -webkit-mask-position: center; mask-position: center;
+.slack-file-tool::before {
+  content: ""; width: 18px; height: 18px; display: block; flex: none; background: var(--text-standard, #1D1C1D);
 }
+${Object.entries(FILE_TOOL_ICONS).map(([name, d]) => {
+  const url = `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='${d}'/></svg>`)}")`;
+  return `.slack-file-tool[data-icon="${name}"]::before { -webkit-mask: ${url} center / contain no-repeat; mask: ${url} center / contain no-repeat; }`;
+}).join("\n")}
 .slack-file-tool[data-tip]:hover::after {
   content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
   padding: 5px 9px; border-radius: 6px; background: #1D1C1D; color: #fff;
@@ -1931,6 +1933,19 @@ ${SIDEBAR} [data-channel-sidebar-row][data-slack-draft]:not([data-selected]) [cl
 .slack-file-details dt { color: var(--text-subtle); }
 .slack-file-details dd { margin: 0; }
 :root[data-color-mode="dark"] :is(.slack-file-tools, .slack-file-details) { background: ${FILE_CARD_BG_DARK}; border-color: rgba(255, 255, 255, 0.14); }
+
+/* The file drop overlay (slackDropOverlay): the whole pane fades to white,
+   no dashed box; Buzz's own icon and words give way to Slack's. */
+[class*="_fileDropOverlay_"][data-slack-drop] {
+  inset: 0 !important; border: 0 !important; border-radius: 0 !important; padding: 24px !important;
+  background: rgba(255, 255, 255, 0.92) !important; gap: 0 !important;
+  display: flex !important; flex-direction: column; align-items: center; justify-content: center;
+}
+:root[data-color-mode="dark"] [class*="_fileDropOverlay_"][data-slack-drop] { background: rgba(26, 29, 33, 0.92) !important; }
+[class*="_fileDropOverlay_"][data-slack-drop] > :not([class^="slack-drop-"]) { display: none !important; }
+.slack-drop-art { margin-bottom: 16px; line-height: 0; }
+.slack-drop-title { font-size: 28px; font-weight: 800; line-height: 36px; color: var(--text-standard); text-align: center; }
+.slack-drop-sub { margin-top: 8px; font-size: 15px; line-height: 22px; color: var(--text-standard); text-align: center; }
 
 /* A dark Slack tooltip placed by script outside any clipping box. */
 .slack-floating-tip {
@@ -3786,6 +3801,14 @@ const FILE_CARD_WIDTH = 328;
 // the border runs straight from 8px in, which a 12px round corner gives).
 const FILE_CARD_RADIUS = 12;
 const FILE_CARD_GAP = 8;
+// Icons of the file card toolbar (24px SVG paths), drawn as stylesheet masks.
+const FILE_TOOL_ICONS = {
+  download: "M7 18a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 8a4 4 0 0 1 0 8M12 11v9m0 0-3-3m3 3 3-3",
+  open: "M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5",
+  share: "M14 6l6 6-6 6M20 12H9a5 5 0 0 0-5 5v1",
+  info: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v5M12 8h.01",
+  };
+
 // Reaction pills under messages (Slack's colours).
 const REACTION = { bg: "rgba(29, 28, 29, 0.06)", mineBg: "rgba(29, 155, 209, 0.1)", mineRing: "#1D9BD1", mineInk: "#1264A3", hoverRing: "rgba(29, 28, 29, 0.3)" };
 
@@ -4015,18 +4038,9 @@ function filePreviews(ctx) {
   });
 
   const React = ctx.react;
-  const ICONS = {
-    download: "M7 18a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 8a4 4 0 0 1 0 8M12 11v9m0 0-3-3m3 3 3-3",
-    open: "M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5",
-    share: "M14 6l6 6-6 6M20 12H9a5 5 0 0 0-5 5v1",
-    info: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v5M12 8h.01",
-  };
-  // Drawn as masks over a solid colour rather than inline SVG, which Buzz's
-  // message styles left invisible here.
-  const icon = (d) => {
-    const url = `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='${d}'/></svg>`)}")`;
-    return h("span", { className: "slack-file-tool-icon", "aria-hidden": "true", style: { WebkitMaskImage: url, maskImage: url } });
-  };
+  // Each icon is a stylesheet mask (FILE_TOOL_ICONS); inline SVG and inline
+  // mask styles both stayed invisible inside Buzz's messages.
+  // Drawn by the button's own ::before, the way the card's </> mark is.
   const formatSize = (bytes) =>
     !Number.isFinite(bytes) ? "" : bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(bytes < 10240 ? 1 : 0)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   const formatTime = (secs) => {
@@ -4068,8 +4082,8 @@ function filePreviews(ctx) {
     })();
     const type = (fileExtension(attachment.name) || "file").toUpperCase();
     const open = () => void openViewer(attachment, source, author);
-    const button = (tip, d, onClick) =>
-      h("button", { type: "button", className: "slack-file-tool", "data-tip": tip, "aria-label": tip, onClick: (event) => { event.stopPropagation(); onClick(event); } }, icon(d));
+    const button = (tip, name, onClick) =>
+      h("button", { type: "button", className: "slack-file-tool", "data-icon": name, "data-tip": tip, "aria-label": tip, onClick: (event) => { event.stopPropagation(); onClick(event); } });
     return h(
       "div",
       { ref: wrap, className: "slack-file-card-wrap", onMouseLeave: () => setDetails(false) },
@@ -4084,10 +4098,10 @@ function filePreviews(ctx) {
       h(
         "div",
         { className: "slack-file-tools", role: "toolbar", "aria-label": t("파일 작업", "File actions") },
-        button(t("다운로드", "Download"), ICONS.download, () => wrap.current?.querySelector('[class*="_fileDownloadAction_"] :is(button, a)')?.click()),
-        button(t("새 창에서 열기", "Open"), ICONS.open, open),
-        button(t("파일 공유…", "Share file…"), ICONS.share, () => wrap.current && forwardMessage(wrap.current)),
-        button(t("파일 세부정보 보기", "View file details"), ICONS.info, () => setDetails((v) => !v)),
+        button(t("다운로드", "Download"), "download", () => wrap.current?.querySelector('[class*="_fileDownloadAction_"] :is(button, a)')?.click()),
+        button(t("새 창에서 열기", "Open"), "open", open),
+        button(t("파일 공유…", "Share file…"), "share", () => wrap.current && forwardMessage(wrap.current)),
+        button(t("파일 세부정보 보기", "View file details"), "info", () => setDetails((v) => !v)),
       ),
       details &&
         h(
@@ -4161,6 +4175,47 @@ function reactionPills(ctx) {
     // style too: if Buzz rewrites a button's own style, put the pill back
     // (set() only writes when a value differs, so this cannot loop).
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["style"] });
+    sync();
+    return () => observer.disconnect();
+  });
+}
+
+// Dragging files over a conversation: Slack fades the whole pane to white and
+// shows a picture, "<대화>(으)로 업로드" and a line under it. Buzz draws a dashed
+// box saying "Drop files into this conversation"; that box is restyled here
+// and given Slack's picture and words.
+const DROP_ART = `<svg width="164" height="140" viewBox="0 0 164 140" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+<circle cx="82" cy="70" r="68" fill="#F4F4F4"/>
+<rect x="44" y="20" width="76" height="62" rx="6" fill="#36C5F0"/><rect x="50" y="28" width="64" height="46" rx="3" fill="#7FD6F5"/>
+<rect x="96" y="34" width="10" height="16" rx="2" fill="#fff"/><path d="M100 52v12M98 56h4M98 60h4" stroke="#fff" stroke-width="2"/>
+<rect x="18" y="52" width="66" height="54" rx="6" fill="#9B51E0"/><rect x="24" y="58" width="54" height="42" rx="3" fill="#B57BF0"/><path d="M45 70l14 9-14 9z" fill="#fff"/>
+<g transform="rotate(-12 110 92)"><rect x="70" y="62" width="80" height="60" rx="6" fill="#fff" stroke="#E8E8E8"/><rect x="76" y="68" width="68" height="48" rx="3" fill="#B6E3F2"/><circle cx="128" cy="82" r="7" fill="#F2C744"/><path d="M76 112l22-22 14 12 10-8 22 18H76z" fill="#2EB67D"/></g>
+</svg>`;
+
+function slackDropOverlay(ctx) {
+  const titleOf = () => {
+    const row = document.querySelector("[data-channel-sidebar-row][data-selected] .navigation-item-label");
+    return (row?.textContent || "").trim();
+  };
+  const sync = () => {
+    for (const overlay of document.querySelectorAll('[class*="_fileDropOverlay_"]:not([data-slack-drop])')) {
+      overlay.setAttribute("data-slack-drop", "");
+      const name = titleOf();
+      const art = document.createElement("div");
+      art.className = "slack-drop-art";
+      art.innerHTML = DROP_ART;
+      const title = document.createElement("div");
+      title.className = "slack-drop-title";
+      title.textContent = name ? t(`${name}(으)로 업로드`, `Upload to ${name}`) : t("이 대화로 업로드", "Upload to this conversation");
+      const sub = document.createElement("div");
+      sub.className = "slack-drop-sub";
+      sub.textContent = t("여기에 놓으면 메시지에 첨부됩니다", "Drop here to attach to your message");
+      overlay.append(art, title, sub);
+    }
+  };
+  ctx.effect(() => {
+    const observer = new MutationObserver(sync);
+    observer.observe(document.body, { childList: true, subtree: true });
     sync();
     return () => observer.disconnect();
   });
@@ -5668,6 +5723,7 @@ export function apply(ctx) {
   filePreviews(ctx);
   composerFileTypes(ctx);
   fileGroupHeaders(ctx);
+  slackDropOverlay(ctx);
   reactionPills(ctx);
   addFormatBars(ctx);
   addDockNewButton(ctx);
