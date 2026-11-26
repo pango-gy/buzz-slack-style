@@ -1861,6 +1861,12 @@ ${SIDEBAR} [data-channel-sidebar-row][data-slack-draft]:not([data-selected]) [cl
 }
 [data-message-reactions][class*="_inlineReactionTool_"] button { padding: 0 6px !important; min-width: 32px !important; }
 [data-message-reactions] [class*="_reactionCount_"] { font-size: 12px !important; font-weight: 700; }
+/* Buzz shows a count only when several people reacted; Slack always does,
+   so a single reaction gets its "1". */
+[data-message-reactions] [class*="_reactionGlyph_"]:not([data-grouped])::after {
+  content: "1"; margin-left: 4px; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+[data-message-reactions] [class*="_reactionGlyph_"] { max-width: none !important; gap: 4px; }
 [data-message-reactions] [class*="_reactionItem_"][data-mine] [class*="_reactionCount_"] { color: ${REACTION.mineInk}; }
 [data-message-reactions] [class*="_reactionNativeEmoji_"] { font-size: 16px !important; max-width: none !important; }
 [data-message-reactions] :is([class*="_reactionCustomEmoji_"], [class*="_reactionPlaceholder_"]) { width: 16px !important; height: 16px !important; scale: 1 !important; }
