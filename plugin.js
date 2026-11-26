@@ -1696,11 +1696,13 @@ ${SLACK_MENUS ? `
 .slack-link-card-site { display: flex; align-items: center; gap: 6px; font-size: 13px; line-height: 18px; color: var(--text-subtle); margin-top: 2px; }
 .slack-link-card-icon { width: 16px; height: 16px; border-radius: 3px; object-fit: contain; flex: none; }
 .slack-link-card-image { width: 80px; height: 80px; margin: 12px 12px 12px 0; flex: none; object-fit: cover; border-radius: 6px; }
-/* A wide picture (most og:images are 1200×630) stays on the right, as
-   before, but whole: a fixed width with its own height, so nothing is cut
-   off. The card grows to fit it when the text is shorter. */
+/* A wide picture: the card's right column, flush to its edges, full card
+   height; fitWide sets its width from its shape so little or nothing is cut. */
 .slack-link-card[data-wide-image] .slack-link-card-image {
-  width: ${LINK_PREVIEW_IMAGE_WIDTH}px; height: auto; max-width: 40%;
+  height: auto; align-self: stretch; max-width: 45%;
+  margin: 0; border-radius: 0; object-fit: cover;
+  border-left: 1px solid color-mix(in srgb, var(--text-standard) 8%, transparent);
+}px; height: auto; max-width: 40%;
   align-self: center; object-fit: contain;
   margin: 12px 12px 12px 0;
   border: 1px solid color-mix(in srgb, var(--text-standard) 8%, transparent);
@@ -3547,8 +3549,6 @@ function undoSend(ctx) {
 const LINK_PREVIEWS = true;
 const LINK_PREVIEW_MAX_IMAGE = 5 * 1024 * 1024;
 const LINK_PREVIEW_HOPS = 4;
-// Width (px) of a wide picture on the right of a link card; its height follows.
-const LINK_PREVIEW_IMAGE_WIDTH = 200;
 
 function linkPreviewCards(ctx) {
   const conversation = ctx.conversation;
@@ -3612,8 +3612,24 @@ function linkPreviewCards(ctx) {
     if (!images.has(url)) images.set(url, readImage(url).catch(() => null).then((blob) => blob || url));
     return images.get(url);
   };
-  // A wide picture (most og:images are 1200×630) is shown whole on the right;
-  // a square-ish one is an 80px thumbnail there.
+  // A wide picture (most og:images are 1200×630) is the card's second
+  // column, as in Slack: flush to the right edge, as tall as the text beside
+  // it, and as wide as its own shape needs at that height (at most 45% of the
+  // card), so it is cut only when that limit is reached. A square-ish one is
+  // an 80px thumbnail there.
+  const sizers = new WeakMap();
+  const fitWide = (card, img) => {
+    const text = card.querySelector(".slack-link-card-text");
+    const ratio = img.naturalWidth / img.naturalHeight;
+    if (!text || !ratio) return;
+    // A wider picture narrows the text, which may then wrap to one more
+    // line; a few passes settle on a width that fits the final height.
+    for (let pass = 0; pass < 4; pass++) {
+      const width = Math.round(Math.min(text.offsetHeight * ratio, card.clientWidth * 0.45));
+      if (img.style.width === `${width}px`) break;
+      img.style.width = `${width}px`;
+    }
+  };
   const shapeCard = (img) => {
     const card = img.closest(".slack-link-card");
     if (!card || !img.naturalWidth || !img.naturalHeight) return;
@@ -3621,6 +3637,26 @@ function linkPreviewCards(ctx) {
     if ((card.dataset.wideImage !== undefined) !== wide) {
       if (wide) card.dataset.wideImage = "";
       else delete card.dataset.wideImage;
+    }
+    if (!wide) {
+      img.style.width = "";
+      return;
+    }
+    fitWide(card, img);
+    if (!sizers.has(card) && typeof ResizeObserver === "function") {
+      // Refit only when the card's width changes (the window or pane was
+      // resized): the picture's own width changes the text's height, and
+      // reacting to that would keep growing the picture.
+      let lastWidth = card.clientWidth;
+      const observer = new ResizeObserver(() => {
+        if (!card.isConnected) return observer.disconnect();
+        if (card.clientWidth === lastWidth) return;
+        lastWidth = card.clientWidth;
+        const current = card.querySelector(".slack-link-card-image");
+        if (current && card.dataset.wideImage !== undefined) fitWide(card, current);
+      });
+      observer.observe(card);
+      sizers.set(card, observer);
     }
   };
   const useAsync = (load, key) => {
