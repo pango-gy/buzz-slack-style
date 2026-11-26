@@ -1703,6 +1703,25 @@ ${SLACK_MENUS ? `
   margin: 0 16px 12px; object-fit: contain; align-self: flex-start;
   border: 1px solid color-mix(in srgb, var(--text-standard) 8%, transparent);
 }
+/* Attached files sit under the text in the message box, as in Slack
+   (Buzz puts them above it). The box's content is a flex column. */
+[data-composer-surface] section[aria-label="Attachments"] {
+  order: 1;
+  margin-block: 2px 0 !important;
+}
+/* Upload progress on an attachment: Slack's blue arc on a light ring that
+   keeps turning until the upload ends (Buzz turns it only while preparing). */
+[data-composer-surface] section[aria-label="Attachments"] [role="progressbar"] { color: ${MENU_HIGHLIGHT}; }
+[data-composer-surface] section[aria-label="Attachments"] [role="progressbar"] svg {
+  animation: slack-upload-spin 800ms linear infinite;
+}
+[data-composer-surface] section[aria-label="Attachments"] [role="progressbar"] circle:not([data-upload-progress]) {
+  stroke: color-mix(in srgb, var(--text-standard) 15%, transparent); opacity: 1;
+}
+@keyframes slack-upload-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  [data-composer-surface] section[aria-label="Attachments"] [role="progressbar"] svg { animation: none; }
+}
 /* Undo send: the message turns pink, then folds to nothing (Slack's look). */
 /* clip-path, not overflow: hidden, which would change how the row's margins
    meet its neighbours and nudge it. */
