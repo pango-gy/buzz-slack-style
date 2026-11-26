@@ -310,8 +310,8 @@ const SIZES = {
 // radius in px (Slack: a 20px rounded square; Buzz: a larger circle).
 const DM_AVATAR = 20;
 const DM_AVATAR_RADIUS = 5;
-// Vertical nudge (px) of that picture so it lines up with the name.
-const DM_IDENTITY_NUDGE = 1;
+// How far (px) sidebar row names are raised to sit at the row's centre.
+const NAME_NUDGE = 1;
 
 // Message avatars: corner radius in px (Slack ~8; a large number = circle).
 const AVATAR_RADIUS = 8;
@@ -779,13 +779,11 @@ ${SIDEBAR} [data-dm-participant-count] {
   padding: 0 !important;
   font-variant-numeric: tabular-nums;
 }
-/* Korean names in this font sit about 1.5px below the row's centre, so the
-   picture or count square beside them reads as high; lower it by 1px to line
-   up with the name (measured from a screenshot). */
-${SIDEBAR} [data-channel-sidebar-row] [data-dm-identity] { transform: translateY(${DM_IDENTITY_NUDGE}px); }
-/* The muted bell after a name sits 1px above the name too (measured). */
-${SIDEBAR} [data-channel-sidebar-row] [role="img"][aria-label="Muted"] {
-  display: inline-flex; transform: translateY(${DM_IDENTITY_NUDGE}px);
+/* Names in this font sit about 1px below the row's centre, while the
+   picture, count square and muted bell beside them are centred (measured
+   from screenshots). Raise only the name text. */
+${SIDEBAR} [data-channel-sidebar-row] [class*="_nameContent_"] > [class*="_label_"] {
+  position: relative; top: ${-NAME_NUDGE}px;
 }
 ${SIDEBAR} [data-dm-identity] .buzz-avatar { -webkit-mask: none !important; mask: none !important; }
 ${SIDEBAR} [data-dm-identity] .buzz-avatar-status-dot { box-shadow: 0 0 0 2px ${c.sidebar}; }
