@@ -1721,10 +1721,6 @@ ${SLACK_MENUS ? `
   height: auto; align-self: stretch; max-width: 45%;
   margin: 0; border-radius: 0; object-fit: cover;
   border-left: 1px solid color-mix(in srgb, var(--text-standard) 8%, transparent);
-}px; height: auto; max-width: 40%;
-  align-self: center; object-fit: contain;
-  margin: 12px 12px 12px 0;
-  border: 1px solid color-mix(in srgb, var(--text-standard) 8%, transparent);
 }
 /* File cards, in messages and in the message box, as in Slack: a white card
    with a light border and 12px corners, a 36px coloured square with the
