@@ -1703,6 +1703,17 @@ ${SLACK_MENUS ? `
   margin: 0 16px 12px; object-fit: contain; align-self: flex-start;
   border: 1px solid color-mix(in srgb, var(--text-standard) 8%, transparent);
 }
+/* Undo send: the message turns pink, then folds to nothing (Slack's look). */
+[data-slack-unsending] {
+  overflow: hidden;
+  animation: slack-unsend ${UNDO_SEND_FOLD_MS}ms ease-in forwards;
+}
+[data-slack-unsending] [data-highlight-surface] { background: #FDE8EC !important; }
+:root[data-color-mode="dark"] [data-slack-unsending] [data-highlight-surface] { background: #4A1E28 !important; }
+@keyframes slack-unsend {
+  0%, 40% { max-height: var(--slack-unsend-height); opacity: 1; }
+  100% { max-height: 0; opacity: 0; }
+}
 /* The 다이렉트 메시지 title's right-click menu, built by this plugin. */
 /* It uses Buzz's own menu classes (buzz-menu-popup text-body-sm, as Buzz's
    menus do), so only the placement is set here. */
@@ -3340,6 +3351,7 @@ function dmSectionMenu(ctx) {
 // are left alone, since the files cannot be put back.
 const UNDO_SEND = true;
 const UNDO_SEND_WINDOW_MS = 5 * 60 * 1000;
+const UNDO_SEND_FOLD_MS = 450;
 
 function undoSend(ctx) {
   const relay = ctx.relay;
@@ -3402,12 +3414,23 @@ function undoSend(ctx) {
       event.stopPropagation();
       const taken = last;
       last = null;
-      try {
-        session.messages.remove([taken.id]);
-      } catch {
+      putBack(editor, taken.content || "");
+      // As in Slack, the message turns pink and folds away, then is deleted.
+      const row = document.querySelector(`[data-message-id="${CSS.escape(taken.id)}"]`);
+      const remove = () => {
+        try {
+          session.messages.remove([taken.id]);
+        } catch {
+          if (row) row.removeAttribute("data-slack-unsending");
+        }
+      };
+      if (!row || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        remove();
         return;
       }
-      putBack(editor, taken.content || "");
+      row.style.setProperty("--slack-unsend-height", `${row.offsetHeight}px`);
+      row.setAttribute("data-slack-unsending", "");
+      setTimeout(remove, UNDO_SEND_FOLD_MS);
     };
     // Typing or sending something else ends the chance to undo.
     const onInput = (event) => {
