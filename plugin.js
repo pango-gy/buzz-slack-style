@@ -943,13 +943,14 @@ ${SIDEBAR} details > summary :not(svg, svg *) {
 
 /* Hover toolbar on a message: Slack's rounded rectangle with square-ish
    buttons instead of Buzz's pill. */
+/* Measured from Slack: 41px tall, 12px corners, a #CBCBCB border. */
 [role="group"][aria-label="Message actions"] {
-  border-radius: 10px !important;
+  border-radius: ${TOOLBAR_RADIUS}px !important;
   corner-shape: round !important;
   padding: 3px !important;
-  gap: 2px !important;
+  gap: 0 !important;
   background: ${FILE_CARD_BG} !important;
-  border: 1px solid ${FILE_CARD_BORDER} !important;
+  border: 1px solid ${TOOLBAR_BORDER} !important;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
 }
 :root[data-color-mode="dark"] [role="group"][aria-label="Message actions"] { background: ${FILE_CARD_BG_DARK} !important; border-color: rgba(255, 255, 255, 0.14) !important; }
@@ -1940,7 +1941,7 @@ ${Object.entries(FILE_TOOL_ICONS).map(([name, d]) => {
 }).join("\n")}
 .slack-file-tool[data-tip]:hover::after {
   content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
-  padding: 5px 9px; border-radius: 6px; background: #1D1C1D; color: #fff;
+  padding: 7px 12px; border-radius: 10px; background: #1D1C1D; color: #fff;
   font-size: 13px; font-weight: 700; line-height: 18px; white-space: nowrap; pointer-events: none; z-index: 2;
 }
 .slack-file-details {
@@ -1968,10 +1969,12 @@ ${Object.entries(FILE_TOOL_ICONS).map(([name, d]) => {
 .slack-drop-sub { margin-top: 8px; font-size: 15px; line-height: 22px; color: var(--text-standard); text-align: center; }
 
 /* A dark Slack tooltip placed by script outside any clipping box. */
+/* Slack's tooltip: 32px tall, 10px corners, white bold 13px on near-black. */
 .slack-floating-tip {
   position: fixed; z-index: 100000; pointer-events: none;
-  padding: 5px 9px; border-radius: 6px; background: #1D1C1D; color: #fff;
+  padding: 7px 12px; border-radius: 10px; corner-shape: round; background: #1D1C1D; color: #fff;
   font-size: 13px; font-weight: 700; line-height: 18px; white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 /* The file viewer: Slack's full-window dark frame with the page inside. */
@@ -4262,6 +4265,10 @@ const TOOLBAR_ICONS = {
 const toolbarMask = (d, width = 1.6) =>
   `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='${width}' stroke-linecap='round' stroke-linejoin='round'><path d='${d}'/></svg>`)}")`;
 
+// The toolbar's corners and border, and its tooltips (measured from Slack).
+const TOOLBAR_RADIUS = 12;
+const TOOLBAR_BORDER = "#CBCBCB";
+
 const TOOLBAR_TIPS = {
   "Add reaction": t("반응 추가...", "Add reaction..."),
   Reply: t("스레드에 답장", "Reply in thread"),
@@ -4291,7 +4298,7 @@ function messageToolbar(ctx) {
     for (const group of document.querySelectorAll('[role="group"][aria-label="Message actions"]')) {
       // Buzz's 36px buttons beat stylesheet sizes (as with reactions), so
       // Slack's 32px is set on each button and the bar itself.
-      for (const [prop, value] of [["padding", "3px"], ["gap", "0px"], ["border-radius", "10px"]])
+      for (const [prop, value] of [["padding", "3px"], ["gap", "0px"], ["border-radius", `${TOOLBAR_RADIUS}px`]])
         if (group.style.getPropertyValue(prop) !== value) group.style.setProperty(prop, value, "important");
       for (const button of group.querySelectorAll(':scope > button, :scope > * > button, :scope [aria-label="More message actions"]')) {
         for (const [prop, value] of [["width", "32px"], ["height", "32px"], ["min-width", "32px"], ["min-height", "32px"], ["padding", "0"], ["border-radius", "6px"]])
