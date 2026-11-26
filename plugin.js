@@ -1729,6 +1729,7 @@ ${SLACK_MENUS ? `
 }
 .slack-link-card-bare { width: ${LINK_PREVIEW_WIDTH}px; max-width: 100%; }
 .slack-link-card-bare[hidden] { display: none !important; }
+.slack-link-card { cursor: pointer; position: relative; z-index: 1; pointer-events: auto !important; }
 .slack-link-card:hover { border-color: color-mix(in srgb, var(--text-standard) 25%, transparent); }
 .slack-link-card-text { flex: 1; min-width: 0; padding: 12px 16px; display: flex; flex-direction: column; gap: 4px; }
 .slack-link-card-title { font-size: 15px; font-weight: 700; line-height: 22px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
@@ -4612,6 +4613,21 @@ function linkPreviewCards(ctx) {
       sizers.set(card, observer);
     }
   };
+  const sameUrl = (a, b) => {
+    try {
+      const x = new URL(a), y = new URL(b);
+      return x.host.replace(/^www\./, "") === y.host.replace(/^www\./, "") && x.pathname.replace(/\/$/, "") === y.pathname.replace(/\/$/, "") && x.search === y.search;
+    } catch {
+      return a === b;
+    }
+  };
+  const clickMessageLink = (from, url) => {
+    const row = from.closest("[data-message-id], [data-highlight-surface]");
+    const link = row && [...row.querySelectorAll("a[href]")].find((a) => !a.closest(".slack-link-card") && sameUrl(a.href, url));
+    if (!link) return false;
+    link.click();
+    return true;
+  };
   const useAsync = (load, key) => {
     const [value, set] = React.useState(null);
     React.useEffect(() => {
@@ -4636,9 +4652,16 @@ function linkPreviewCards(ctx) {
         site = new URL(url).hostname.replace(/^www\./, "");
       } catch {}
     }
+    // Clicking the card does what clicking the link in the message does:
+    // that link is clicked when it can be found (the host's open() did not
+    // open anything in practice), and open() is the fallback.
     const go = (event) => {
       event.preventDefault();
-      open();
+      event.stopPropagation();
+      if (clickMessageLink(event.currentTarget, url)) return;
+      try {
+        open();
+      } catch {}
     };
     return h(
       "a",
@@ -4693,7 +4716,8 @@ function linkPreviewCards(ctx) {
     card.hidden = true;
     card.addEventListener("click", (event) => {
       event.preventDefault();
-      link.click();
+      event.stopPropagation();
+      if (!clickMessageLink(card, href)) link.click();
     });
     page(href).then(async (preview) => {
       if (!preview || !card.isConnected) return;
