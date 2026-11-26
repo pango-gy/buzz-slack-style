@@ -1704,14 +1704,16 @@ ${SLACK_MENUS ? `
   border: 1px solid color-mix(in srgb, var(--text-standard) 8%, transparent);
 }
 /* Undo send: the message turns pink, then folds to nothing (Slack's look). */
+/* clip-path, not overflow: hidden, which would change how the row's margins
+   meet its neighbours and nudge it. */
 [data-slack-unsending] {
-  overflow: hidden;
-  animation: slack-unsend ${UNDO_SEND_FOLD_MS}ms ease-in forwards;
+  clip-path: inset(0);
+  animation: slack-unsend ${UNDO_SEND_FOLD_MS}ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 [data-slack-unsending] [data-highlight-surface] { background: #FDE8EC !important; }
 :root[data-color-mode="dark"] [data-slack-unsending] [data-highlight-surface] { background: #4A1E28 !important; }
 @keyframes slack-unsend {
-  0%, 40% { max-height: var(--slack-unsend-height); opacity: 1; }
+  0%, 12% { max-height: var(--slack-unsend-height); opacity: 1; }
   100% { max-height: 0; opacity: 0; }
 }
 /* The 다이렉트 메시지 title's right-click menu, built by this plugin. */
@@ -3351,7 +3353,7 @@ function dmSectionMenu(ctx) {
 // are left alone, since the files cannot be put back.
 const UNDO_SEND = true;
 const UNDO_SEND_WINDOW_MS = 5 * 60 * 1000;
-const UNDO_SEND_FOLD_MS = 450;
+const UNDO_SEND_FOLD_MS = 280;
 
 function undoSend(ctx) {
   const relay = ctx.relay;
