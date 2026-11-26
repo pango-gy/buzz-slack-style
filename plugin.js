@@ -956,14 +956,21 @@ ${SIDEBAR} details > summary :not(svg, svg *) {
 /* Slack's icons are darker and a little larger than Buzz's. */
 [role="group"][aria-label="Message actions"] :is(button, [role="button"]) { color: var(--text-standard) !important; }
 [role="group"][aria-label="Message actions"] :is(button, [role="button"]) svg { width: 18px !important; height: 18px !important; }
-/* The 공유… button this plugin adds (messageToolbar): Slack's curved arrow. */
+/* The toolbar's icons, Slack's thin ones (TOOLBAR_ICONS): Buzz's own SVG is
+   hidden and the box holding it paints the mask instead. */
 .slack-forward-button { display: inline-flex; align-items: center; justify-content: center; border: 0; background: transparent; cursor: pointer; padding: 0; }
 .slack-forward-button:hover { background: color-mix(in srgb, var(--text-standard) 8%, transparent) !important; }
+[role="group"][aria-label="Message actions"] [data-slack-icon] svg { visibility: hidden !important; }
+[role="group"][aria-label="Message actions"] [data-slack-icon] :has(> svg),
 .slack-forward-button::before {
-  content: ""; width: 18px; height: 18px; display: block; background: var(--text-standard);
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 6l6 6-6 6M20 12H9a5 5 0 0 0-5 5v1'/%3E%3C/svg%3E") center / contain no-repeat;
-          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 6l6 6-6 6M20 12H9a5 5 0 0 0-5 5v1'/%3E%3C/svg%3E") center / contain no-repeat;
+  width: 18px !important; height: 18px !important; display: inline-block; background: currentColor !important;
 }
+.slack-forward-button::before { content: ""; }
+${Object.entries(TOOLBAR_ICONS).map(([label, d]) => {
+  const mask = toolbarMask(d, label === "More message actions" ? 2.6 : 1.6);
+  const where = label === "share" ? `.slack-forward-button::before` : `[role="group"][aria-label="Message actions"] [data-slack-icon=${JSON.stringify(label)}] :has(> svg)`;
+  return `${where} { -webkit-mask: ${mask} center / contain no-repeat; mask: ${mask} center / contain no-repeat; }`;
+}).join("\n")}
 [role="group"][aria-label="Message actions"] :is(button, [role="button"]) {
   width: 32px !important;
   height: 32px !important;
@@ -4243,6 +4250,18 @@ function slackDropOverlay(ctx) {
 // The hover toolbar on a message, as in Slack: a dark tooltip naming each
 // button (Buzz shows the browser's slow plain one), and a 공유… button that
 // forwards the message (Buzz keeps Forward inside its ⋯ menu).
+// Slack-like icons for the toolbar buttons, by Buzz's aria-label (thin
+// 24px strokes; ⋮ instead of ⋯). Drawn as stylesheet masks.
+const TOOLBAR_ICONS = {
+  "Add reaction": "M20 12.5a8 8 0 1 1-6.5-7.86M8.5 14.5s1.2 1.6 3.5 1.6 3.5-1.6 3.5-1.6M9 10h.01M15 10h.01M18.5 2.5v6M15.5 5.5h6",
+  Reply: "M20 11.5a7.5 7.5 0 0 1-11.1 6.6L4 19.5l1.2-4.4A7.5 7.5 0 1 1 20 11.5zM8.5 10h7M8.5 13.5h4.5",
+  "Copy link": "M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1",
+  "More message actions": "M12 5.5h.01M12 12h.01M12 18.5h.01",
+  share: "M14 6l6 6-6 6M20 12H9a5 5 0 0 0-5 5v1",
+};
+const toolbarMask = (d, width = 1.6) =>
+  `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='${width}' stroke-linecap='round' stroke-linejoin='round'><path d='${d}'/></svg>`)}")`;
+
 const TOOLBAR_TIPS = {
   "Add reaction": t("반응 추가...", "Add reaction..."),
   Reply: t("스레드에 답장", "Reply in thread"),
@@ -4270,7 +4289,16 @@ function messageToolbar(ctx) {
   };
   const sync = () => {
     for (const group of document.querySelectorAll('[role="group"][aria-label="Message actions"]')) {
+      // Buzz's 36px buttons beat stylesheet sizes (as with reactions), so
+      // Slack's 32px is set on each button and the bar itself.
+      for (const [prop, value] of [["padding", "3px"], ["gap", "0px"], ["border-radius", "10px"]])
+        if (group.style.getPropertyValue(prop) !== value) group.style.setProperty(prop, value, "important");
       for (const button of group.querySelectorAll(':scope > button, :scope > * > button, :scope [aria-label="More message actions"]')) {
+        for (const [prop, value] of [["width", "32px"], ["height", "32px"], ["min-width", "32px"], ["min-height", "32px"], ["padding", "0"], ["border-radius", "6px"]])
+          if (button.style.getPropertyValue(prop) !== value) button.style.setProperty(prop, value, "important");
+        const label = button.getAttribute("aria-label") || "";
+        const icon = button.classList.contains("slack-forward-button") ? "share" : TOOLBAR_ICONS[label] ? label : null;
+        if (icon && button.getAttribute("data-slack-icon") !== icon) button.setAttribute("data-slack-icon", icon);
         const tip = tipFor(button);
         if (tip && button.getAttribute("data-slack-tip") !== tip) button.setAttribute("data-slack-tip", tip);
         // The browser's own tooltip would show on top of this one.
@@ -4286,6 +4314,7 @@ function messageToolbar(ctx) {
         button.className = `${copy.className} slack-forward-button`;
         button.setAttribute("aria-label", t("공유…", "Share…"));
         button.setAttribute("data-slack-tip", t("공유…", "Share…"));
+        button.setAttribute("data-slack-icon", "share");
         button.addEventListener("click", (event) => {
           event.stopPropagation();
           forward(group);
