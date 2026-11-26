@@ -4112,6 +4112,10 @@ const REACTION_PILL = {
   add: { padding: "0 6px", "min-width": "32px" },
   slot: { width: "auto", "min-width": "0", "max-width": "none", height: "auto", overflow: "visible", display: "inline-flex", "align-items": "center" },
   item: { height: "24px", "border-radius": "12px" },
+  // Buzz draws the emoji at 7/6 of its size; Slack's is a 16px picture,
+  // which a 14px colour emoji glyph matches.
+  emoji: { "font-size": "14px", "line-height": "1", scale: "1", padding: "0", "max-width": "none" },
+  picture: { width: "16px", height: "16px", scale: "1" },
 };
 function reactionPills(ctx) {
   const set = (el, styles) => {
@@ -4129,6 +4133,8 @@ function reactionPills(ctx) {
         set(slot, REACTION_PILL.slot);
         for (const inner of slot.children) if (inner.tagName !== "IMG" && !inner.matches('[class*="_reactionNativeEmoji_"]')) set(inner, REACTION_PILL.slot);
       }
+      for (const emoji of button.querySelectorAll('[class*="_reactionNativeEmoji_"]')) set(emoji, REACTION_PILL.emoji);
+      for (const picture of button.querySelectorAll('[class*="_reactionCustomEmoji_"], [class*="_reactionPlaceholder_"]')) set(picture, REACTION_PILL.picture);
     }
   };
   ctx.effect(() => {
