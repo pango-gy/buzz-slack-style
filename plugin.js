@@ -1725,6 +1725,14 @@ ${SLACK_MENUS ? `
 [data-composer-surface] section[aria-label="Attachments"] li[data-media] [data-media-preview]::after {
   border-color: color-mix(in srgb, var(--text-standard) 13%, transparent) !important;
 }
+/* Hovering the tile dims the picture slightly, as in Slack. The preview's
+   ::after is already its border layer, so it carries the dimmer too. */
+[data-composer-surface] section[aria-label="Attachments"] li[data-media] [data-media-preview]::after {
+  transition: background-color 120ms ease;
+}
+[data-composer-surface] section[aria-label="Attachments"] li[data-media]:hover [data-media-preview]::after {
+  background: rgba(0, 0, 0, 0.18);
+}
 /* Its remove button (not the picture, which is a button too), as in Slack: a black 20px circle with a white X and a
    white ring, sitting on the tile's top-right corner. The list scrolls
    sideways, so it gets room for the part that sticks out. */
