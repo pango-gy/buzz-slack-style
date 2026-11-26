@@ -1930,6 +1930,13 @@ ${SIDEBAR} [data-channel-sidebar-row][data-slack-draft]:not([data-selected]) [cl
 .slack-file-details dd { margin: 0; }
 :root[data-color-mode="dark"] :is(.slack-file-tools, .slack-file-details) { background: ${FILE_CARD_BG_DARK}; border-color: rgba(255, 255, 255, 0.14); }
 
+/* A dark Slack tooltip placed by script outside any clipping box. */
+.slack-floating-tip {
+  position: fixed; z-index: 100000; pointer-events: none;
+  padding: 5px 9px; border-radius: 6px; background: #1D1C1D; color: #fff;
+  font-size: 13px; font-weight: 700; line-height: 18px; white-space: nowrap;
+}
+
 /* The file viewer: Slack's full-window dark frame with the page inside. */
 /* Slightly smaller than the window, as in Slack: the app shows dimmed around
    it, the frame has rounded corners and the page fills it under the bar. */
@@ -4226,14 +4233,45 @@ function fileGroupHeaders(ctx) {
 // The file chips in the message box show the file's type ("HTML") under its
 // name, as in Slack, instead of its size; the type comes from the name.
 function composerFileTypes(ctx) {
+  const setAttr = (el, name, value) => {
+    if (!el || el.getAttribute(name) === value) return;
+    if (value === null) el.removeAttribute(name);
+    else el.setAttribute(name, value);
+  };
   const sync = () => {
     for (const item of document.querySelectorAll('[data-composer-surface] section[aria-label="Attachments"] li:not([data-media])')) {
       const name = item.querySelector('[class*="_name_"]')?.textContent || "";
       const type = (fileExtension(name) || "").toUpperCase() || null;
-      if (item.getAttribute("data-slack-type") === type) continue;
-      if (type) item.setAttribute("data-slack-type", type);
-      else item.removeAttribute("data-slack-type");
+      setAttr(item, "data-slack-type", type);
+      // attr() in CSS reads the element's own attribute, so the hint carries it too.
+      setAttr(item.querySelector('[class*="_hint_"]'), "data-slack-type", type);
     }
+    // The list scrolls sideways, so it clips what sticks out of it: room on
+    // top and right for the remove button on each tile's corner. Set on the
+    // element itself, as Buzz's own list padding wins over stylesheet rules.
+    for (const list of document.querySelectorAll('[data-composer-surface] section[aria-label="Attachments"] ul')) {
+      for (const [prop, value] of [["padding-top", "12px"], ["padding-right", "12px"]])
+        if (list.style.getPropertyValue(prop) !== value) list.style.setProperty(prop, value, "important");
+    }
+    for (const button of document.querySelectorAll('[data-composer-surface] section[aria-label="Attachments"] li [class*="_actions_"] button'))
+      setAttr(button, "data-slack-tip", t("파일 제거", "Remove file"));
+  };
+  // Tooltips over the remove buttons, drawn outside the clipping list.
+  let tip = null;
+  const showTip = (button) => {
+    tip?.remove();
+    tip = document.createElement("div");
+    tip.className = "slack-floating-tip";
+    tip.textContent = button.getAttribute("data-slack-tip");
+    document.body.append(tip);
+    const r = button.getBoundingClientRect();
+    const w = tip.offsetWidth;
+    tip.style.left = `${Math.max(4, Math.min(innerWidth - w - 4, r.left + r.width / 2 - w / 2))}px`;
+    tip.style.top = `${Math.max(4, r.top - tip.offsetHeight - 8)}px`;
+  };
+  const hideTip = () => {
+    tip?.remove();
+    tip = null;
   };
   ctx.effect(() => {
     let queued = false;
@@ -4246,8 +4284,24 @@ function composerFileTypes(ctx) {
       });
     });
     observer.observe(document.body, { childList: true, subtree: true });
+    const over = (event) => {
+      const button = event.target.closest?.("[data-slack-tip]");
+      if (button) showTip(button);
+    };
+    const out = (event) => {
+      if (event.target.closest?.("[data-slack-tip]")) hideTip();
+    };
+    document.addEventListener("pointerover", over, true);
+    document.addEventListener("pointerout", out, true);
+    document.addEventListener("pointerdown", hideTip, true);
     sync();
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("pointerover", over, true);
+      document.removeEventListener("pointerout", out, true);
+      document.removeEventListener("pointerdown", hideTip, true);
+      hideTip();
+    };
   });
 }
 
