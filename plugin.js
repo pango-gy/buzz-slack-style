@@ -4552,6 +4552,129 @@ function recipientListPlacement(ctx) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Forum channels as a list of post cards, as in Buzz's earlier forum view
+// (each post a rounded card with its author, time, text and reply count;
+// clicking a card opens its replies). Buzz 1.0.6 draws forums like any
+// chat channel. Only the main list of a forum channel changes; chat
+// channels, DMs and the thread pane stay as they are. Set FORUM_CARDS to
+// false to show forums like chat channels again.
+const FORUM_CARDS = true;
+
+function forumCards(ctx) {
+  if (!FORUM_CARDS) return;
+  const relay = ctx.relay;
+  // Buzz marks a channel's message list with its id; forum ids come from the
+  // channel list, so the cards follow channels being added or changed.
+  const POST_ROW = "[data-message-id]:not([data-membership-row]) > [data-highlight-surface]";
+  const forumTimelines = (ids) => ids.map((id) => `[data-channel-timeline=${JSON.stringify(id)}]`).join(", ");
+  const css = (ids) => {
+    if (!ids.length) return "";
+    const F = `:is(${forumTimelines(ids)})`;
+    // Only post rows: join/leave notes and agent-addressed entries also carry
+    // data-highlight-surface. The doubled attribute outranks the general
+    // message spacing rules above.
+    const ROW = `${F} ${POST_ROW}[data-highlight-surface]`;
+    const line = "color-mix(in srgb, var(--text-standard) 13%, transparent)";
+    return `
+/* Forum channels: every post is its own card. */
+${ROW} {
+  box-sizing: border-box !important;
+  width: auto !important;
+  margin: 6px 16px !important;
+  padding: 12px 16px 12px 12px !important;
+  border: 1px solid ${line} !important;
+  border-radius: 12px !important;
+  corner-shape: round !important;
+  cursor: pointer;
+  transition: border-color 0.12s ease;
+}
+${ROW}:hover, ${ROW}[data-thread-open] {
+  border-color: color-mix(in srgb, var(--text-standard) 26%, transparent) !important;
+}
+/* Buzz's row hover paint fills the card instead of a full-width band. */
+${ROW}::before, ${ROW}::after {
+  inset: 0 !important;
+  border-radius: 12px !important;
+}
+/* Posts by the same person a few minutes apart are separate cards too:
+   show the name Buzz hides on a follow-up line, and its time in the
+   picture column (Buzz draws no picture there). */
+${ROW}[data-stack-previous] [data-copy-author] {
+  position: static !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+  clip: auto !important;
+  clip-path: none !important;
+  overflow: visible !important;
+  white-space: normal !important;
+  user-select: auto !important;
+}
+${ROW}[data-stack-previous] [class*="_continuationTime_"] { opacity: 1 !important; }
+/* Reply count under the post. */
+${ROW} [data-thread-summary] { margin-top: 6px !important; }
+`;
+  };
+
+  let style;
+  let ids = [];
+  const update = () => {
+    const session = relay.snapshot()?.session;
+    const list = session?.channels?.list?.().channels ?? [];
+    const next = list.filter((c) => c && c.channelType === "forum" && typeof c.id === "string").map((c) => c.id).sort();
+    if (next.join() === ids.join()) return;
+    ids = next;
+    if (style) style.textContent = css(ids);
+  };
+
+  // Clicking a card (not a link, button, picture or selected text) opens its
+  // replies: the "N replies" line if it has one, otherwise its Reply button.
+  const SKIP = 'a, button, [role="button"], input, textarea, select, summary, label, video, audio, img, [contenteditable="true"], pre, code, table, [data-preview-card-trigger], [role="group"], [role="menu"], [role="dialog"]';
+  const onClick = (event) => {
+    if (!ids.length || event.button !== 0 || event.defaultPrevented) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const target = event.target;
+    if (!(target instanceof Element) || target.closest(SKIP)) return;
+    const row = target.closest("[data-highlight-surface]");
+    if (!row?.matches(POST_ROW)) return;
+    const timeline = row?.closest("[data-channel-timeline]");
+    if (!row || !timeline || !ids.includes(timeline.getAttribute("data-channel-timeline"))) return;
+    const selection = document.getSelection?.();
+    if (selection && !selection.isCollapsed && row.contains(selection.anchorNode)) return;
+    const own = (el) => el && el.closest("[data-highlight-surface]") === row;
+    const summary = [...row.querySelectorAll("[data-thread-summary]")].find(own);
+    const reply = [...row.querySelectorAll('[role="group"] button[aria-label="Reply"]:not(:disabled)')].find(own);
+    const open = summary || reply;
+    if (open) open.click();
+  };
+
+  ctx.effect(() => {
+    style = document.createElement("style");
+    style.dataset.plugin = "team.slack-sidebar.forum";
+    document.head.appendChild(style);
+    ids = [];
+    let stopList = () => {};
+    const watch = () => {
+      stopList();
+      const session = relay.snapshot()?.session;
+      const stop = session?.channels?.subscribeList?.(update);
+      stopList = () => typeof stop === "function" && stop();
+      update();
+    };
+    watch();
+    const stopRelay = relay.subscribe?.(watch);
+    document.addEventListener("click", onClick);
+    return () => {
+      document.removeEventListener("click", onClick);
+      stopList();
+      if (typeof stopRelay === "function") stopRelay();
+      style.remove();
+      style = undefined;
+    };
+  });
+}
+
 export function apply(ctx) {
   recipientListPlacement(ctx);
   applyRecommendedOnce();
@@ -4569,6 +4692,7 @@ export function apply(ctx) {
   hiddenDmRows(ctx);
   dmSectionMenu(ctx);
   linkPreviewCards(ctx);
+  forumCards(ctx);
   undoSend(ctx);
   addFormatBars(ctx);
   addDockNewButton(ctx);

@@ -14,6 +14,7 @@ A plugin that makes the Buzz desktop app look and feel like Slack.
 - **Alerts for every new channel message**, like Slack's "All new messages" (Buzz alone only alerts for mentions, DMs and thread replies)
 - Profile card: hovering a picture or a name opens a Slack-style card above it (large picture and name, local time, Profile/Message buttons)
 - **Link previews**: a Slack-style card with the title, description, site and picture under each web link in a message (see "Link previews" below)
+- **Forums as post cards**: forum channels are not run together like chat; as in Buzz's earlier forum view, each post is a rounded card (author, time, text, reply count). Click a card to open its replies
 - Right-click the Direct messages title for hidden DMs; **Mute and hide** in a DM's right-click menu
 - **Undo send**: right after sending, `Cmd+Z` (`Ctrl+Z` on Windows) in the empty message box deletes the message and puts its text back in the box, as in Slack (not for messages with files; typing something else ends it)
 - Finer details: the message hover toolbar, selected channel rows, date dividers, the new-messages line, code blocks and more
@@ -121,6 +122,7 @@ All settings are constants near the top of `plugin.js`. After editing, reload th
 | `MENTION_SELECTED`, `INLINE_CODE_COLOR`, `NEW_LINE_COLOR` | Selected @mention suggestion, inline code text, the new-messages line |
 | `SEARCH_HEIGHT` | Height of the search box at the top |
 | `LINK_PREVIEWS` | Link preview cards on or off |
+| `FORUM_CARDS` | Forum channels as a list of post cards on or off |
 | `UNDO_SEND`, `UNDO_SEND_WINDOW_MS` | Undo send with `Cmd+Z` on or off, and how long it stays possible |
 | `DM_SECTION_MENU` | Right-click menu on the Direct messages title (hidden DMs) on or off |
 
