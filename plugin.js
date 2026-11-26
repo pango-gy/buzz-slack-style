@@ -1828,6 +1828,42 @@ ${Object.entries(FILE_KIND_COLORS).map(([kind, color]) => `:is([class*="_filePre
 [data-composer-surface] section[aria-label="Attachments"] li:not([data-media]) [class*="_actions_"] { z-index: 1; }
 [data-composer-surface] section[aria-label="Attachments"] li:not([data-media]):hover { background: color-mix(in srgb, var(--text-standard) 3%, var(--surface-composer, #fff)) !important; }
 
+/* Slack's toolbar over a hovered file card (this plugin's cards): a white
+   pill of 32px buttons with dark tooltips; it replaces Buzz's own download
+   button there. */
+.slack-file-card-wrap { position: relative; display: inline-flex; max-width: 100%; }
+.slack-file-card-wrap [class*="_fileDownloadAction_"] { display: none !important; }
+.slack-file-tools {
+  position: absolute; top: 50%; right: 12px; transform: translateY(-50%);
+  display: flex; gap: 2px; padding: 3px;
+  background: ${FILE_CARD_BG}; border: 1px solid ${FILE_CARD_BORDER}; border-radius: 10px; corner-shape: round;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  opacity: 0; pointer-events: none; transition: opacity 120ms ease;
+}
+.slack-file-card-wrap:is(:hover, :focus-within) .slack-file-tools { opacity: 1; pointer-events: auto; }
+.slack-file-card-wrap:hover [class*="_filePreviewAttachment_"] { border-color: ${FILE_CARD_BORDER_HOVER} !important; }
+.slack-file-tool {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent;
+  color: var(--text-standard); cursor: pointer;
+}
+.slack-file-tool:hover { background: color-mix(in srgb, var(--text-standard) 8%, transparent); }
+.slack-file-tool[data-tip]:hover::after {
+  content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  padding: 5px 9px; border-radius: 6px; background: #1D1C1D; color: #fff;
+  font-size: 13px; font-weight: 700; line-height: 18px; white-space: nowrap; pointer-events: none; z-index: 2;
+}
+.slack-file-details {
+  position: absolute; top: calc(100% + 6px); right: 12px; z-index: 3; min-width: 240px;
+  padding: 12px 14px; border-radius: 8px; background: ${FILE_CARD_BG}; color: var(--text-standard);
+  border: 1px solid ${FILE_CARD_BORDER}; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12); font-size: 13px;
+}
+.slack-file-details-name { font-weight: 700; font-size: 15px; margin-bottom: 8px; overflow-wrap: anywhere; }
+.slack-file-details dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; }
+.slack-file-details dt { color: var(--text-subtle); }
+.slack-file-details dd { margin: 0; }
+:root[data-color-mode="dark"] :is(.slack-file-tools, .slack-file-details) { background: ${FILE_CARD_BG_DARK}; border-color: rgba(255, 255, 255, 0.14); }
+
 /* The file viewer: Slack's full-window dark frame with the page inside. */
 .slack-file-viewer {
   position: fixed; inset: 0; z-index: var(--layer-popover, 1000);
@@ -3811,7 +3847,44 @@ function filePreviews(ctx) {
     };
   });
 
+  const React = ctx.react;
+  const ICONS = {
+    download: "M7 18a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 8a4 4 0 0 1 0 8M12 11v9m0 0-3-3m3 3 3-3",
+    open: "M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5",
+    share: "M14 6l6 6-6 6M20 12H9a5 5 0 0 0-5 5v1",
+    info: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v5M12 8h.01",
+  };
+  const icon = (d) =>
+    h("svg", { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" }, h("path", { d }));
+  const formatSize = (bytes) =>
+    !Number.isFinite(bytes) ? "" : bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(bytes < 10240 ? 1 : 0)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  const formatTime = (secs) => {
+    if (!Number.isFinite(secs)) return "";
+    try {
+      return new Date(secs * (secs < 1e12 ? 1000 : 1)).toLocaleString(LANG === "ko" ? "ko-KR" : undefined, { dateStyle: "medium", timeStyle: "short" });
+    } catch {
+      return "";
+    }
+  };
+  // Buzz's forward lives in the message's ⋯ menu; open it and pick Forward.
+  const forwardMessage = (wrap) => {
+    const row = wrap.closest("[data-message-id]");
+    const more = row?.querySelector('[aria-label="More message actions"]');
+    if (!more) return;
+    more.click();
+    let tries = 0;
+    const pick = () => {
+      const item = [...document.querySelectorAll(".buzz-menu-popup .buzz-menu-item")].find((el) => /^(Forward message|메시지 전달)$/.test(el.textContent.trim()));
+      if (item) item.click();
+      else if (tries++ < 10) setTimeout(pick, 50);
+    };
+    setTimeout(pick, 30);
+  };
+
+  // Slack's floating toolbar on a file card: download, open, share, details.
   function SlackFileCard({ attachment, source, message, FileCard }) {
+    const [details, setDetails] = React.useState(false);
+    const wrap = React.useRef(null);
     if (!FileCard) return null;
     const author = (() => {
       try {
@@ -3822,14 +3895,42 @@ function filePreviews(ctx) {
         return "";
       }
     })();
-    // Slack shows only the type ("HTML"), not the size.
-    return h(FileCard, {
-      attachment: { ...attachment, size: undefined },
-      source,
-      onOpenLink: () => false,
-      typeLabel: (fileExtension(attachment.name) || "file").toUpperCase(),
-      onPreview: () => void openViewer(attachment, source, author),
-    });
+    const type = (fileExtension(attachment.name) || "file").toUpperCase();
+    const open = () => void openViewer(attachment, source, author);
+    const button = (tip, d, onClick) =>
+      h("button", { type: "button", className: "slack-file-tool", "data-tip": tip, "aria-label": tip, onClick: (event) => { event.stopPropagation(); onClick(event); } }, icon(d));
+    return h(
+      "div",
+      { ref: wrap, className: "slack-file-card-wrap", onMouseLeave: () => setDetails(false) },
+      // Slack shows only the type ("HTML"), not the size.
+      h(FileCard, {
+        attachment: { ...attachment, size: undefined },
+        source,
+        onOpenLink: () => false,
+        typeLabel: type,
+        onPreview: open,
+      }),
+      h(
+        "div",
+        { className: "slack-file-tools", role: "toolbar", "aria-label": t("파일 작업", "File actions") },
+        button(t("다운로드", "Download"), ICONS.download, () => wrap.current?.querySelector('[class*="_fileDownloadAction_"] :is(button, a)')?.click()),
+        button(t("새 창에서 열기", "Open"), ICONS.open, open),
+        button(t("파일 공유…", "Share file…"), ICONS.share, () => wrap.current && forwardMessage(wrap.current)),
+        button(t("파일 세부정보 보기", "View file details"), ICONS.info, () => setDetails((v) => !v)),
+      ),
+      details &&
+        h(
+          "div",
+          { className: "slack-file-details", role: "dialog", "aria-label": t("파일 세부정보", "File details") },
+          h("div", { className: "slack-file-details-name" }, attachment.name || ""),
+          h("dl", null,
+            h("dt", null, t("종류", "Type")), h("dd", null, type),
+            attachment.size !== undefined && h("dt", null, t("크기", "Size")), attachment.size !== undefined && h("dd", null, formatSize(attachment.size)),
+            author && h("dt", null, t("보낸 사람", "Shared by")), author && h("dd", null, author),
+            message?.createdAt !== undefined && h("dt", null, t("보낸 시간", "Shared")), message?.createdAt !== undefined && h("dd", null, formatTime(message.createdAt)),
+          ),
+        ),
+    );
   }
 
   conversation.registerAttachment({
