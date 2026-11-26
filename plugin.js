@@ -1726,6 +1726,97 @@ ${SLACK_MENUS ? `
   margin: 12px 12px 12px 0;
   border: 1px solid color-mix(in srgb, var(--text-standard) 8%, transparent);
 }
+/* File cards, in messages and in the message box, as in Slack: a white card
+   with a light border and 12px corners, a 36px coloured square with the
+   file's icon, the name in bold and the type ("HTML") under it. */
+:is([class*="_filePreviewAttachment_"], [class*="_fileAttachment_"]),
+[data-composer-surface] section[aria-label="Attachments"] li:not([data-media]):not([data-voice-draft]) {
+  width: ${FILE_CARD_WIDTH}px; max-width: 100% !important;
+  min-height: 62px !important;
+  background: var(--surface-composer, #fff) !important;
+  border: 1px solid color-mix(in srgb, var(--text-standard) 12%, transparent) !important;
+  border-radius: 12px !important; corner-shape: round !important;
+  box-shadow: none !important;
+}
+[class*="_fileAttachment_"], [data-composer-surface] section[aria-label="Attachments"] li:not([data-media]):not([data-voice-draft]) {
+  padding: 12px !important; gap: 12px !important;
+}
+:is([class*="_filePreviewAttachment_"], [class*="_fileAttachment_"]) { width: ${FILE_CARD_WIDTH}px !important; }
+[data-composer-surface] section[aria-label="Attachments"] li:not([data-media]):not([data-voice-draft]) { width: ${COMPOSER_FILE_WIDTH}px !important; }
+[class*="_filePreviewAttachment_"] { position: relative; }
+[class*="_filePreviewAttachment_"]:hover { border-color: color-mix(in srgb, var(--text-standard) 25%, transparent) !important; }
+[class*="_filePreviewMain_"] > * {
+  min-height: 60px !important; padding: 12px !important; gap: 12px !important;
+  border-radius: 12px !important; background: transparent !important;
+}
+/* The whole card opens the preview; the download button only shows on hover. */
+[class*="_filePreviewAttachment_"] [class*="_fileDownloadAction_"] {
+  position: absolute; top: 50%; right: 8px; transform: translateY(-50%);
+  opacity: 0; transition: opacity 120ms ease;
+}
+[class*="_filePreviewAttachment_"]:is(:hover, :focus-within) [class*="_fileDownloadAction_"] { opacity: 1; }
+[class*="_filePreviewAttachment_"] [class*="_fileDownloadAction_"] > * {
+  background: var(--surface-composer, #fff) !important;
+  border: 1px solid color-mix(in srgb, var(--text-standard) 12%, transparent) !important;
+  border-radius: 8px !important;
+}
+:is([class*="_filePreviewAttachment_"], [class*="_fileAttachment_"], [data-composer-surface] section[aria-label="Attachments"]) [class*="_slot_"] {
+  width: 36px !important; height: 36px !important; margin: 0 !important; border-radius: 8px !important;
+}
+:is([class*="_filePreviewAttachment_"], [class*="_fileAttachment_"], [data-composer-surface] section[aria-label="Attachments"]) [data-kind] {
+  width: 36px !important; height: 36px !important; border-radius: 8px !important; corner-shape: round !important;
+  color: #fff !important; background: ${FILE_KIND_COLORS.text} !important;
+}
+${Object.entries(FILE_KIND_COLORS).map(([kind, color]) => `:is([class*="_filePreviewAttachment_"], [class*="_fileAttachment_"], [data-composer-surface] section[aria-label="Attachments"]) [data-kind="${kind}"] { background: ${color} !important; }`).join("\n")}
+:is([class*="_filePreviewAttachment_"], [class*="_fileAttachment_"]) [class*="_fileAttachmentName_"],
+[data-composer-surface] section[aria-label="Attachments"] li:not([data-media]) [class*="_name_"] {
+  font-size: 15px !important; font-weight: 700 !important; line-height: 22px !important; color: var(--text-standard) !important;
+}
+:is([class*="_filePreviewAttachment_"], [class*="_fileAttachment_"]) [class*="_fileAttachmentMeta_"],
+[data-composer-surface] section[aria-label="Attachments"] li:not([data-media]) [class*="_hint_"] {
+  font-size: 13px !important; line-height: 18px !important; color: var(--text-subtle) !important;
+}
+/* In the message box the type replaces "13 KB · Ready"; an error keeps its text. */
+[data-composer-surface] section[aria-label="Attachments"] li[data-slack-type]:not([data-upload-error]) [class*="_hint_"] { font-size: 0 !important; }
+[data-composer-surface] section[aria-label="Attachments"] li[data-slack-type]:not([data-upload-error]) [class*="_hint_"]::after {
+  content: attr(data-slack-type); font-size: 13px;
+}
+[data-composer-surface] section[aria-label="Attachments"] li[data-slack-type] [class*="_hint_"] { display: block; }
+/* Clicking anywhere on a chip opens Buzz's preview of it, as in Slack. */
+[data-composer-surface] section[aria-label="Attachments"] li:not([data-media]) button[data-draft-preview] { position: static !important; }
+[data-composer-surface] section[aria-label="Attachments"] li:not([data-media]) button[data-draft-preview]::after {
+  content: ""; position: absolute; inset: 0; border-radius: 12px;
+}
+[data-composer-surface] section[aria-label="Attachments"] li:not([data-media]) [class*="_actions_"] { z-index: 1; }
+[data-composer-surface] section[aria-label="Attachments"] li:not([data-media]):hover { background: color-mix(in srgb, var(--text-standard) 3%, var(--surface-composer, #fff)) !important; }
+
+/* The file viewer: Slack's full-window dark frame with the page inside. */
+.slack-file-viewer {
+  position: fixed; inset: 0; z-index: var(--layer-popover, 1000);
+  display: flex; flex-direction: column;
+  background: rgba(26, 29, 33, 0.96); color: #fff;
+}
+.slack-file-viewer-bar { display: flex; align-items: center; gap: 8px; padding: 10px 16px; min-height: 52px; }
+.slack-file-viewer-title { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 13px; line-height: 18px; }
+.slack-file-viewer-title strong { font-size: 15px; }
+.slack-file-viewer-title span { opacity: 0.8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slack-file-viewer-button {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 8px; border: 0;
+  background: transparent; color: #fff !important; cursor: pointer;
+}
+.slack-file-viewer-button:hover { background: rgba(255, 255, 255, 0.12); }
+.slack-file-viewer-body {
+  flex: 1; min-height: 0; margin: 0 16px 16px; border-radius: 8px; overflow: hidden;
+  background: #fff; color: #1D1C1D; display: flex; align-items: center; justify-content: center;
+  font-size: 15px;
+}
+.slack-file-viewer-frame { width: 100%; height: 100%; border: 0; background: #fff; }
+.slack-file-viewer-text {
+  align-self: stretch; width: 100%; margin: 0; padding: 20px 24px; overflow: auto;
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-word;
+}
+
 /* Attached files sit under the text in the message box, as in Slack
    (Buzz puts them above it). The box's content is a flex column. */
 [data-composer-surface] section[aria-label="Attachments"] {
@@ -1756,19 +1847,18 @@ ${SLACK_MENUS ? `
 [data-composer-surface] section[aria-label="Attachments"] li[data-media]:hover [data-media-preview]::after {
   background: rgba(0, 0, 0, 0.18);
 }
-/* Its remove button (not the picture, which is a button too), as in Slack: a black 20px circle with a white X and a
+/* The remove button of an attached file or picture, as in Slack: a black 20px circle with a white X and a
    white ring, sitting on the tile's top-right corner. The list scrolls
    sideways, so it gets room for the part that sticks out. */
 [data-composer-surface] section[aria-label="Attachments"] ul {
   padding-top: 8px !important;
   padding-right: 8px !important;
 }
-[data-composer-surface] section[aria-label="Attachments"] li[data-media] [data-remove],
-[data-composer-surface] section[aria-label="Attachments"] li[data-media] > :not([data-media-preview]):has(button) {
+[data-composer-surface] section[aria-label="Attachments"] li [class*="_actions_"] {
   top: -8px !important;
   right: -8px !important;
 }
-[data-composer-surface] section[aria-label="Attachments"] li[data-media] button:not([data-media-preview]) {
+[data-composer-surface] section[aria-label="Attachments"] li [class*="_actions_"] button {
   width: 20px !important; height: 20px !important;
   min-width: 0 !important; min-height: 0 !important; padding: 0 !important;
   border-radius: 50% !important; corner-shape: round !important;
@@ -1776,18 +1866,18 @@ ${SLACK_MENUS ? `
   box-shadow: 0 0 0 2px #fff !important; border: 0 !important;
   display: inline-flex !important; align-items: center; justify-content: center;
 }
-[data-composer-surface] section[aria-label="Attachments"] li[data-media] button:not([data-media-preview]) svg {
+[data-composer-surface] section[aria-label="Attachments"] li [class*="_actions_"] button svg {
   width: 12px !important; height: 12px !important;
 }
 /* While uploading, the same spot shows the turning ring on white, as in
    Slack; hovering it still shows the black X to cancel. */
-[data-composer-surface] section[aria-label="Attachments"] li[data-media]:not(:hover) button:has([role="progressbar"]) {
+[data-composer-surface] section[aria-label="Attachments"] li:not(:hover) [class*="_actions_"] button:has([role="progressbar"]) {
   background: #fff !important;
 }
-[data-composer-surface] section[aria-label="Attachments"] li[data-media] button:not([data-media-preview]):has([role="progressbar"]) svg {
+[data-composer-surface] section[aria-label="Attachments"] li [class*="_actions_"] button:has([role="progressbar"]) svg {
   width: 16px !important; height: 16px !important;
 }
-:root[data-color-mode="dark"] [data-composer-surface] section[aria-label="Attachments"] li[data-media] button:not([data-media-preview]) {
+:root[data-color-mode="dark"] [data-composer-surface] section[aria-label="Attachments"] li [class*="_actions_"] button {
   box-shadow: 0 0 0 2px var(--surface-composer, #1A1D21) !important;
 }
 /* Upload progress on an attachment: Slack's blue arc on a light ring that
@@ -3452,6 +3542,13 @@ function dmSectionMenu(ctx) {
 // the box to edit and send again. It works for the last message sent from
 // that box, until you type or send something else there. Messages with files
 // are left alone, since the files cannot be put back.
+// Width (px) of a file card in messages and in the message box (Slack: ~326).
+const FILE_CARD_WIDTH = 326;
+// Width (px) of a file chip in the message box (Slack: ~234).
+const COMPOSER_FILE_WIDTH = 234;
+// Colours of a file card's type square, by Buzz's file kind (Slack's palette).
+const FILE_KIND_COLORS = { code: "#CB512D", pdf: "#D93F3F", sheet: "#2BAC76", archive: "#616061", text: "#3C8DDE" };
+
 // Size (px) of an attached picture's square in the message box. Measured
 // side by side with Slack at the same window size: 60.
 const ATTACHMENT_THUMB = 60;
@@ -3555,6 +3652,172 @@ function undoSend(ctx) {
       stopRelay?.();
       stopSend?.();
     };
+  });
+}
+
+// File cards in messages, as in Slack: clicking the card opens a viewer for
+// HTML pages and text files, which Buzz cannot preview (it only downloads
+// them). The viewer reads the file through Buzz's own media address and
+// shows an HTML page in a sandboxed frame that runs no scripts.
+const FILE_PREVIEWS = true;
+const FILE_PREVIEW_MAX_BYTES = 5 * 1024 * 1024;
+const PREVIEW_HTML = new Set(["html", "htm"]);
+const PREVIEW_TEXT = new Set(["txt", "md", "markdown", "json", "csv", "tsv", "log", "xml", "yml", "yaml", "js", "ts", "tsx", "jsx", "py", "rs", "go", "java", "kt", "swift", "rb", "sh", "css", "sql", "diff", "patch", "toml", "ini"]);
+const fileExtension = (name) => {
+  const parts = String(name || "").toLowerCase().split(".");
+  return parts.length > 1 ? parts.at(-1) : "";
+};
+
+function filePreviews(ctx) {
+  const conversation = ctx.conversation;
+  if (!FILE_PREVIEWS || typeof conversation?.registerAttachment !== "function") return;
+  const h = ctx.react.createElement;
+  const kindOf = (attachment) => {
+    if (attachment?.kind !== "file") return null;
+    const ext = fileExtension(attachment.name);
+    if (PREVIEW_HTML.has(ext) || attachment.mime === "text/html") return "html";
+    if (PREVIEW_TEXT.has(ext) || /^text\//.test(attachment.mime || "")) return "text";
+    return null;
+  };
+
+  let viewer = null;
+  const closeViewer = () => {
+    viewer?.remove();
+    viewer = null;
+  };
+  const openViewer = async (attachment, source, author) => {
+    closeViewer();
+    const name = attachment.name || t("파일", "File");
+    const box = document.createElement("div");
+    box.className = "slack-file-viewer";
+    box.setAttribute("role", "dialog");
+    box.setAttribute("aria-modal", "true");
+    box.setAttribute("aria-label", name);
+    const bar = document.createElement("div");
+    bar.className = "slack-file-viewer-bar";
+    const title = document.createElement("div");
+    title.className = "slack-file-viewer-title";
+    const who = document.createElement("strong");
+    who.textContent = author || "";
+    const file = document.createElement("span");
+    file.textContent = name;
+    title.append(who, file);
+    const download = document.createElement("a");
+    download.className = "slack-file-viewer-button";
+    download.href = source;
+    download.download = name;
+    download.title = t("다운로드", "Download");
+    download.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></svg>';
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "slack-file-viewer-button";
+    close.title = t("닫기", "Close");
+    close.setAttribute("aria-label", t("닫기", "Close"));
+    close.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+    close.addEventListener("click", closeViewer);
+    bar.append(title, download, close);
+    const body = document.createElement("div");
+    body.className = "slack-file-viewer-body";
+    body.textContent = t("불러오는 중…", "Loading…");
+    box.append(bar, body);
+    box.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeViewer();
+    });
+    document.body.append(box);
+    viewer = box;
+    close.focus();
+    try {
+      const response = await fetch(source);
+      if (!response.ok) throw new Error(String(response.status));
+      const size = Number(response.headers.get("content-length"));
+      if (size > FILE_PREVIEW_MAX_BYTES) throw new Error("too big");
+      const text = await response.text();
+      if (viewer !== box) return;
+      body.textContent = "";
+      if (kindOf(attachment) === "html") {
+        const frame = document.createElement("iframe");
+        frame.className = "slack-file-viewer-frame";
+        // No allow-scripts and no allow-same-origin: the page is drawn, never run.
+        frame.setAttribute("sandbox", "");
+        frame.setAttribute("referrerpolicy", "no-referrer");
+        frame.title = name;
+        frame.srcdoc = text;
+        body.append(frame);
+      } else {
+        const pre = document.createElement("pre");
+        pre.className = "slack-file-viewer-text";
+        pre.textContent = text;
+        body.append(pre);
+      }
+    } catch {
+      if (viewer === box) body.textContent = t("이 파일은 미리 볼 수 없습니다. 다운로드해서 열어 주세요.", "This file can't be previewed. Download it to open it.");
+    }
+  };
+  ctx.effect?.(() => {
+    const onKey = (event) => {
+      if (event.key === "Escape" && viewer) closeViewer();
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      closeViewer();
+    };
+  });
+
+  function SlackFileCard({ attachment, source, message, FileCard }) {
+    if (!FileCard) return null;
+    const author = (() => {
+      try {
+        const snap = ctx.relay?.snapshot?.();
+        const profile = snap?.session?.profiles?.snapshot?.().get?.(message?.authorId ?? message?.pubkey);
+        return profile?.displayName || profile?.name || "";
+      } catch {
+        return "";
+      }
+    })();
+    return h(FileCard, {
+      attachment,
+      source,
+      onOpenLink: () => false,
+      typeLabel: (fileExtension(attachment.name) || "file").toUpperCase(),
+      onPreview: () => void openViewer(attachment, source, author),
+    });
+  }
+
+  conversation.registerAttachment({
+    id: "slack-file-preview",
+    title: t("파일 미리보기", "File preview"),
+    order: 100,
+    matches: (attachment) => !!kindOf(attachment),
+    component: SlackFileCard,
+  });
+}
+
+// The file chips in the message box show the file's type ("HTML") under its
+// name, as in Slack, instead of its size; the type comes from the name.
+function composerFileTypes(ctx) {
+  const sync = () => {
+    for (const item of document.querySelectorAll('[data-composer-surface] section[aria-label="Attachments"] li:not([data-media])')) {
+      const name = item.querySelector('[class*="_name_"]')?.textContent || "";
+      const type = (fileExtension(name) || "").toUpperCase() || null;
+      if (item.getAttribute("data-slack-type") === type) continue;
+      if (type) item.setAttribute("data-slack-type", type);
+      else item.removeAttribute("data-slack-type");
+    }
+  };
+  ctx.effect(() => {
+    let queued = false;
+    const observer = new MutationObserver(() => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        sync();
+      });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    sync();
+    return () => observer.disconnect();
   });
 }
 
@@ -4915,6 +5178,8 @@ export function apply(ctx) {
   linkPreviewCards(ctx);
   forumCards(ctx);
   undoSend(ctx);
+  filePreviews(ctx);
+  composerFileTypes(ctx);
   addFormatBars(ctx);
   addDockNewButton(ctx);
   addChannelTabs(ctx);
