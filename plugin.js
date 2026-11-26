@@ -1708,13 +1708,14 @@ ${SLACK_MENUS ? `
    meet its neighbours and nudge it. */
 [data-slack-unsending] {
   clip-path: inset(0);
-  animation: slack-unsend ${UNDO_SEND_FOLD_MS}ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: slack-unsend ${UNDO_SEND_FOLD_MS}ms ease-in-out forwards;
 }
-[data-slack-unsending] [data-highlight-surface] { background: #FDE8EC !important; }
-:root[data-color-mode="dark"] [data-slack-unsending] [data-highlight-surface] { background: #4A1E28 !important; }
+/* Measured from Slack: solid #EC7F95 for about 85ms, then the row folds to
+   nothing in about 150ms without fading. */
+[data-slack-unsending] [data-highlight-surface] { background: #EC7F95 !important; }
 @keyframes slack-unsend {
-  0%, 12% { max-height: var(--slack-unsend-height); opacity: 1; }
-  100% { max-height: 0; opacity: 0; }
+  0%, 36% { max-height: var(--slack-unsend-height); }
+  100% { max-height: 0; }
 }
 /* The 다이렉트 메시지 title's right-click menu, built by this plugin. */
 /* It uses Buzz's own menu classes (buzz-menu-popup text-body-sm, as Buzz's
@@ -3353,7 +3354,7 @@ function dmSectionMenu(ctx) {
 // are left alone, since the files cannot be put back.
 const UNDO_SEND = true;
 const UNDO_SEND_WINDOW_MS = 5 * 60 * 1000;
-const UNDO_SEND_FOLD_MS = 280;
+const UNDO_SEND_FOLD_MS = 240;
 
 function undoSend(ctx) {
   const relay = ctx.relay;
