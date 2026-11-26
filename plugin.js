@@ -944,12 +944,25 @@ ${SIDEBAR} details > summary :not(svg, svg *) {
 /* Hover toolbar on a message: Slack's rounded rectangle with square-ish
    buttons instead of Buzz's pill. */
 [role="group"][aria-label="Message actions"] {
-  border-radius: 8px !important;
+  border-radius: 10px !important;
   corner-shape: round !important;
-  padding: 2px !important;
+  padding: 3px !important;
   gap: 2px !important;
-  border: 1px solid color-mix(in srgb, var(--text-standard) 14%, transparent) !important;
+  background: ${FILE_CARD_BG} !important;
+  border: 1px solid ${FILE_CARD_BORDER} !important;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+}
+:root[data-color-mode="dark"] [role="group"][aria-label="Message actions"] { background: ${FILE_CARD_BG_DARK} !important; border-color: rgba(255, 255, 255, 0.14) !important; }
+/* Slack's icons are darker and a little larger than Buzz's. */
+[role="group"][aria-label="Message actions"] :is(button, [role="button"]) { color: var(--text-standard) !important; }
+[role="group"][aria-label="Message actions"] :is(button, [role="button"]) svg { width: 18px !important; height: 18px !important; }
+/* The 공유… button this plugin adds (messageToolbar): Slack's curved arrow. */
+.slack-forward-button { display: inline-flex; align-items: center; justify-content: center; border: 0; background: transparent; cursor: pointer; padding: 0; }
+.slack-forward-button:hover { background: color-mix(in srgb, var(--text-standard) 8%, transparent) !important; }
+.slack-forward-button::before {
+  content: ""; width: 18px; height: 18px; display: block; background: var(--text-standard);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 6l6 6-6 6M20 12H9a5 5 0 0 0-5 5v1'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 6l6 6-6 6M20 12H9a5 5 0 0 0-5 5v1'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 [role="group"][aria-label="Message actions"] :is(button, [role="button"]) {
   width: 32px !important;
@@ -4227,6 +4240,79 @@ function slackDropOverlay(ctx) {
   });
 }
 
+// The hover toolbar on a message, as in Slack: a dark tooltip naming each
+// button (Buzz shows the browser's slow plain one), and a 공유… button that
+// forwards the message (Buzz keeps Forward inside its ⋯ menu).
+const TOOLBAR_TIPS = {
+  "Add reaction": t("반응 추가...", "Add reaction..."),
+  Reply: t("스레드에 답장", "Reply in thread"),
+  "Copy link": t("링크 복사", "Copy link"),
+  "More message actions": t("추가 작업", "More actions"),
+  Edit: t("메시지 편집", "Edit message"),
+  "Edit message": t("메시지 편집", "Edit message"),
+};
+function messageToolbar(ctx) {
+  const tipFor = (button) => {
+    const label = button.getAttribute("aria-label") || button.getAttribute("title") || "";
+    return TOOLBAR_TIPS[label] || TRANSLATIONS[label] || label;
+  };
+  const forward = (group) => {
+    const more = group.querySelector('[aria-label="More message actions"]');
+    if (!more) return;
+    more.click();
+    let tries = 0;
+    const pick = () => {
+      const item = [...document.querySelectorAll(".buzz-menu-popup .buzz-menu-item")].find((el) => /^(Forward message|메시지 전달)$/.test(el.textContent.trim()));
+      if (item) item.click();
+      else if (tries++ < 10) setTimeout(pick, 50);
+    };
+    setTimeout(pick, 30);
+  };
+  const sync = () => {
+    for (const group of document.querySelectorAll('[role="group"][aria-label="Message actions"]')) {
+      for (const button of group.querySelectorAll(':scope > button, :scope > * > button, :scope [aria-label="More message actions"]')) {
+        const tip = tipFor(button);
+        if (tip && button.getAttribute("data-slack-tip") !== tip) button.setAttribute("data-slack-tip", tip);
+        // The browser's own tooltip would show on top of this one.
+        if (button.hasAttribute("title")) {
+          button.setAttribute("data-slack-title", button.getAttribute("title"));
+          button.removeAttribute("title");
+        }
+      }
+      const copy = group.querySelector(':scope > [aria-label="Copy link"]');
+      if (copy && !group.querySelector(".slack-forward-button")) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `${copy.className} slack-forward-button`;
+        button.setAttribute("aria-label", t("공유…", "Share…"));
+        button.setAttribute("data-slack-tip", t("공유…", "Share…"));
+        button.addEventListener("click", (event) => {
+          event.stopPropagation();
+          forward(group);
+        });
+        copy.before(button);
+      }
+    }
+  };
+  ctx.effect(() => {
+    let queued = false;
+    const observer = new MutationObserver(() => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        sync();
+      });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    sync();
+    return () => {
+      observer.disconnect();
+      document.querySelectorAll(".slack-forward-button").forEach((el) => el.remove());
+    };
+  });
+}
+
 // Above two or more files in a message, Slack shows "2개의 첨부 파일 ▾" (folds
 // and unfolds them) and "모두 다운로드" (downloads each one). Buzz shows only
 // the cards, so this adds that line before each group of cards.
@@ -5729,6 +5815,7 @@ export function apply(ctx) {
   filePreviews(ctx);
   composerFileTypes(ctx);
   fileGroupHeaders(ctx);
+  messageToolbar(ctx);
   slackDropOverlay(ctx);
   reactionPills(ctx);
   addFormatBars(ctx);
