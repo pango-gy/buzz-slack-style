@@ -1863,6 +1863,14 @@ ${SIDEBAR} [data-channel-sidebar-row][data-slack-draft]:not([data-selected]) [cl
   display: inline-flex !important; align-items: center !important; justify-content: center !important;
   background: transparent !important; overflow: visible !important;
 }
+/* The button's icon and label slots are fixed squares too; let them fit
+   the emoji and count instead of letting the count spill out. */
+[data-message-reactions] [class*="_reactionItem_"] button > *,
+[data-message-reactions] [class*="_reactionItem_"] button > * > :not(img) {
+  width: auto !important; min-width: 0 !important; max-width: none !important;
+  height: auto !important; overflow: visible !important;
+  display: inline-flex !important; align-items: center !important;
+}
 [data-message-reactions] [class*="_reactionGlyph_"] { display: inline-flex !important; align-items: center; }
 [data-message-reactions] [class*="_reactionGlyph_"] [class*="_reactionNativeEmoji_"] { padding: 0 !important; line-height: 1 !important; }
 [data-message-reactions][class*="_inlineReactionTool_"] button { padding: 0 6px !important; min-width: 32px !important; }
