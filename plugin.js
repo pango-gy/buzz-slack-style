@@ -1710,16 +1710,16 @@ ${SLACK_MENUS ? `
   margin-block: 2px 0 !important;
 }
 /* An attached picture or video: Slack's small rounded square (about 60px,
-   8px corners, a thin border) instead of Buzz's 76px tile. */
+   12px corners, a thin border) instead of Buzz's 76px tile. */
 [data-composer-surface] section[aria-label="Attachments"] li[data-media] {
   width: ${ATTACHMENT_THUMB}px !important;
   height: ${ATTACHMENT_THUMB}px !important;
-  border-radius: 8px !important;
+  border-radius: ${ATTACHMENT_RADIUS}px !important;
   corner-shape: round !important;
 }
 [data-composer-surface] section[aria-label="Attachments"] li[data-media] [data-media-preview],
 [data-composer-surface] section[aria-label="Attachments"] li[data-media] [data-media-preview] :is(img, video) {
-  border-radius: 8px !important;
+  border-radius: ${ATTACHMENT_RADIUS}px !important;
   corner-shape: round !important;
 }
 [data-composer-surface] section[aria-label="Attachments"] li[data-media] [data-media-preview]::after {
@@ -3394,6 +3394,8 @@ function dmSectionMenu(ctx) {
 // are left alone, since the files cannot be put back.
 // Size (px) of an attached picture's square in the message box (Slack: ~60).
 const ATTACHMENT_THUMB = 60;
+// Corner radius (px) of that square (Slack: 12, plain round corners).
+const ATTACHMENT_RADIUS = 12;
 
 const UNDO_SEND = true;
 const UNDO_SEND_WINDOW_MS = 5 * 60 * 1000;
