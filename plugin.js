@@ -1815,7 +1815,9 @@ ${Object.entries(FILE_KIND_COLORS).map(([kind, color]) => `:is([class*="_filePre
   font-size: 13px !important; line-height: 18px !important; color: var(--text-subtle) !important;
 }
 /* In the message box the type replaces "13 KB · Ready"; an error keeps its text. */
-[data-composer-surface] section[aria-label="Attachments"] li[data-slack-type]:not([data-upload-error]) [class*="_hint_"] { font-size: 0 !important; }
+/* font-size 0 hides Buzz's text; letter-spacing and word gaps would still
+   push the type right, so they go to 0 too. */
+[data-composer-surface] section[aria-label="Attachments"] li[data-slack-type]:not([data-upload-error]) [class*="_hint_"] { font-size: 0 !important; letter-spacing: 0 !important; word-spacing: 0 !important; display: flex !important; }
 [data-composer-surface] section[aria-label="Attachments"] li[data-slack-type]:not([data-upload-error]) [class*="_hint_"]::after {
   content: attr(data-slack-type); font-size: 13px;
 }
