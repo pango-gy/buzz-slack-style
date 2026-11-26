@@ -1709,6 +1709,27 @@ ${SLACK_MENUS ? `
   order: 1;
   margin-block: 2px 0 !important;
 }
+/* An attached picture or video: Slack's small rounded square (about 60px,
+   8px corners, a thin border) instead of Buzz's 76px tile. */
+[data-composer-surface] section[aria-label="Attachments"] li[data-media] {
+  width: ${ATTACHMENT_THUMB}px !important;
+  height: ${ATTACHMENT_THUMB}px !important;
+  border-radius: 8px !important;
+  corner-shape: round !important;
+}
+[data-composer-surface] section[aria-label="Attachments"] li[data-media] [data-media-preview],
+[data-composer-surface] section[aria-label="Attachments"] li[data-media] [data-media-preview] :is(img, video) {
+  border-radius: 8px !important;
+  corner-shape: round !important;
+}
+[data-composer-surface] section[aria-label="Attachments"] li[data-media] [data-media-preview]::after {
+  border-color: color-mix(in srgb, var(--text-standard) 13%, transparent) !important;
+}
+/* Its remove / progress button, smaller to fit the smaller tile. */
+[data-composer-surface] section[aria-label="Attachments"] li[data-media] button {
+  transform: scale(0.8);
+  transform-origin: top right;
+}
 /* Upload progress on an attachment: Slack's blue arc on a light ring that
    keeps turning until the upload ends (Buzz turns it only while preparing). */
 [data-composer-surface] section[aria-label="Attachments"] [role="progressbar"] { color: ${MENU_HIGHLIGHT}; }
@@ -3371,6 +3392,9 @@ function dmSectionMenu(ctx) {
 // the box to edit and send again. It works for the last message sent from
 // that box, until you type or send something else there. Messages with files
 // are left alone, since the files cannot be put back.
+// Size (px) of an attached picture's square in the message box (Slack: ~60).
+const ATTACHMENT_THUMB = 60;
+
 const UNDO_SEND = true;
 const UNDO_SEND_WINDOW_MS = 5 * 60 * 1000;
 const UNDO_SEND_FOLD_MS = 240;
