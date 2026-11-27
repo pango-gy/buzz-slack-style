@@ -1971,7 +1971,12 @@ ${Object.entries(FILE_TOOL_ICONS).map(([name, d]) => {
 
 /* Pictures in messages: Slack's 8px corners (Buzz 16px); slackImageSizes sets
    their size. */
-[data-highlight-surface] [class*="_attachmentImage_"] { --media-preview-radius: ${IMAGE_MAX.radius}px; border-radius: ${IMAGE_MAX.radius}px !important; }
+[data-highlight-surface] [class*="_attachmentImage_"] {
+  --media-preview-radius: ${IMAGE_MAX.radius}px; border-radius: ${IMAGE_MAX.radius}px !important;
+  /* Slack's hairline round a picture is #CCCCCC (measured); Buzz's is lighter. */
+  --border-image: ${IMAGE_MAX.border};
+}
+:root[data-color-mode="dark"] [data-highlight-surface] [class*="_attachmentImage_"] { --border-image: rgba(255, 255, 255, 0.16); }
 
 /* "Uploading to …" after sending while a file still uploads: Slack's blue
    progress bar. */
@@ -4364,7 +4369,7 @@ function messageToolbar(ctx) {
 // 720px wide (Buzz: up to 320px tall and 360px wide, so wide pictures were
 // small), with 8px corners. Buzz writes the size on each picture's own style
 // from its known shape ("w / h"), so this rewrites that width the same way.
-const IMAGE_MAX = { width: 720, height: 360, radius: 8 };
+const IMAGE_MAX = { width: 720, height: 360, radius: 8, border: "#CCCCCC" };
 function slackImageSizes(ctx) {
   const sync = () => {
     for (const image of document.querySelectorAll('[data-highlight-surface] a[class*="_attachmentImage_"][data-media-preview]')) {
