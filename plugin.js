@@ -1985,6 +1985,36 @@ ${Object.entries(FILE_TOOL_ICONS).map(([name, d]) => {
 [class*="_backgroundUpload_"] [role="status"][data-slack-ko]::after { content: attr(data-slack-ko); font-size: 13px; letter-spacing: normal; }
 [class*="_backgroundUploadBar_"] > * { background: ${MENU_HIGHLIGHT} !important; }
 
+/* The stand-in message while a sent file uploads (pendingUploadMessages):
+   laid out like a message row, files with Slack's turning ring. Buzz's
+   "Uploading to …" line is hidden meanwhile. */
+[data-composer-surface][data-slack-pending] [class*="_backgroundUpload_"] { display: none !important; }
+.slack-pending-message { display: flex; gap: ${AVATAR_GAP}px; padding: 8px 20px 8px ${20 + MESSAGE_INDENT}px; flex: none; }
+.slack-pending-avatar { width: ${SIZES.messageAvatar}px; height: ${SIZES.messageAvatar}px; border-radius: ${AVATAR_RADIUS}px; overflow: hidden; flex: none; background: var(--surface-inset); }
+.slack-pending-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.slack-pending-body { min-width: 0; flex: 1; }
+.slack-pending-head { display: flex; align-items: baseline; gap: 8px; }
+.slack-pending-head strong { font-size: ${SIZES.messageText}px; font-weight: ${AUTHOR_WEIGHT}; color: var(--text-standard); }
+.slack-pending-head span { font-size: ${SIZES.messageTime}px; color: var(--text-subtle); }
+.slack-pending-text { font-size: ${SIZES.messageText}px; line-height: ${SIZES.messageLine}px; color: var(--text-standard); white-space: pre-wrap; overflow-wrap: anywhere; }
+.slack-pending-files { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.slack-pending-image { position: relative; max-width: 360px; border-radius: ${IMAGE_MAX.radius}px; overflow: hidden; box-shadow: 0 0 0 1px ${IMAGE_MAX.border}; }
+.slack-pending-image img { display: block; max-width: 360px; max-height: 360px; opacity: 0.6; }
+.slack-pending-file {
+  position: relative; display: flex; align-items: center; gap: 12px; width: ${FILE_CARD_WIDTH}px; max-width: 100%; min-height: 62px;
+  padding: 12px 44px 12px 12px; box-sizing: border-box; border: 1px solid ${FILE_CARD_BORDER}; border-radius: ${FILE_CARD_RADIUS}px; background: ${FILE_CARD_BG};
+}
+.slack-pending-kind { width: 36px; height: 36px; border-radius: 8px; flex: none; background: ${FILE_KIND_COLORS.text}; opacity: 0.6; }
+${Object.entries(FILE_KIND_COLORS).map(([kind, color]) => `.slack-pending-kind[data-kind="${kind}"] { background: ${color}; }`).join("\n")}
+.slack-pending-name { font-size: 15px; font-weight: 700; color: var(--text-standard); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.7; }
+.slack-pending-ring {
+  position: absolute; top: 50%; right: 12px; width: 20px; height: 20px; margin-top: -10px; box-sizing: border-box;
+  border-radius: 50%; border: 2px solid color-mix(in srgb, var(--text-standard) 15%, transparent); border-top-color: ${MENU_HIGHLIGHT};
+  animation: slack-upload-spin 800ms linear infinite;
+}
+.slack-pending-image .slack-pending-ring { top: 8px; right: 8px; margin-top: 0; background: #fff; }
+:root[data-color-mode="dark"] .slack-pending-file { background: ${FILE_CARD_BG_DARK}; border-color: rgba(255, 255, 255, 0.14); }
+
 /* A dark Slack tooltip placed by script outside any clipping box. */
 /* Slack's tooltip: 32px tall, 10px corners, white bold 13px on near-black. */
 .slack-floating-tip {
@@ -4439,6 +4469,141 @@ function uploadStatusKorean(ctx) {
   });
 }
 
+// Sending while a file is still uploading: Buzz keeps the message back until
+// the upload ends and shows only "Uploading to …" under the message box.
+// Slack shows the message at once with a turning ring on its files. So at
+// that moment this draws a stand-in message at the bottom of the
+// conversation (your picture and name, the text, the files with a ring) and
+// hides the status line; when the upload ends, Buzz posts the real message in
+// its proper place and the stand-in goes. Only the screen changes: Buzz still
+// sends the message the usual way.
+const PENDING_UPLOAD_MESSAGE = true;
+
+function pendingUploadMessages(ctx) {
+  if (!PENDING_UPLOAD_MESSAGE) return;
+  const relay = ctx.relay;
+  const pending = new Map(); // form -> { node }
+  const esc = (text) => String(text).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
+
+  const me = () => {
+    let name = "";
+    try {
+      const snap = relay?.snapshot?.();
+      const scope = typeof snap?.session?.scope === "string" ? snap.session.scope : "";
+      const viewer = scope.slice(scope.lastIndexOf(":") + 1);
+      const p = snap?.session?.profiles?.snapshot?.().get?.(viewer);
+      name = p?.displayName || p?.name || "";
+    } catch {}
+    const avatar = document.querySelector('[aria-label="Your profile"] img')?.getAttribute("src") || "";
+    return { name: name || t("나", "Me"), avatar };
+  };
+
+  // What is in the box just before Buzz takes it: the text and the files.
+  const snapshot = (form) => {
+    const items = [...form.querySelectorAll('section[aria-label="Attachments"] li')];
+    if (!items.some((li) => li.querySelector('[role="progressbar"]'))) return null;
+    const editor = form.querySelector('[contenteditable="true"]');
+    const files = items.map((li) => ({
+      name: li.querySelector('[class*="_name_"]')?.textContent?.trim() || "",
+      image: li.hasAttribute("data-media") ? li.querySelector("img")?.getAttribute("src") || "" : "",
+      kind: li.querySelector("[data-kind]")?.getAttribute("data-kind") || "text",
+    }));
+    return { text: (editor?.innerText || "").trim(), files };
+  };
+
+  const render = (form, snap) => {
+    // The message list of this box's conversation (or thread): the nearest
+    // ancestor holding one. The stand-in goes right after it, above the box.
+    let pane = form.parentElement;
+    while (pane && !pane.querySelector("[data-message-scroller]")) pane = pane.parentElement;
+    const scroller = pane?.querySelector("[data-message-scroller]");
+    if (!scroller) return null;
+    const who = me();
+    const time = new Date().toLocaleTimeString(LANG === "en" ? undefined : "ko-KR", { hour: "numeric", minute: "2-digit" });
+    const node = document.createElement("div");
+    node.className = "slack-pending-message";
+    node.setAttribute("aria-live", "polite");
+    node.innerHTML =
+      `<div class="slack-pending-avatar">${who.avatar ? `<img src="${esc(who.avatar)}" alt="">` : ""}</div>` +
+      `<div class="slack-pending-body">` +
+      `<div class="slack-pending-head"><strong>${esc(who.name)}</strong><span>${esc(time)}</span></div>` +
+      (snap.text ? `<div class="slack-pending-text">${esc(snap.text)}</div>` : "") +
+      `<div class="slack-pending-files">` +
+      snap.files
+        .map((f) =>
+          f.image
+            ? `<div class="slack-pending-image"><img src="${esc(f.image)}" alt=""><span class="slack-pending-ring"></span></div>`
+            : `<div class="slack-pending-file"><span class="slack-pending-kind" data-kind="${esc(f.kind)}"></span><span class="slack-pending-name">${esc(f.name)}</span><span class="slack-pending-ring"></span></div>`,
+        )
+        .join("") +
+      `</div></div>`;
+    scroller.after(node);
+    return node;
+  };
+
+  const begin = (form) => {
+    if (pending.has(form)) return;
+    const snap = snapshot(form);
+    if (!snap) return;
+    // Buzz shows its status line once it holds the message back.
+    let tries = 0;
+    const wait = () => {
+      if (!form.isConnected) return;
+      if (form.querySelector('[class*="_backgroundUpload_"]')) {
+        const node = render(form, snap);
+        if (node) {
+          pending.set(form, { node });
+          form.setAttribute("data-slack-pending", "");
+        }
+      } else if (tries++ < 20) setTimeout(wait, 50);
+    };
+    setTimeout(wait, 30);
+  };
+
+  const finish = () => {
+    for (const [form, { node }] of pending) {
+      if (form.isConnected && form.querySelector('[class*="_backgroundUpload_"]') && node.isConnected) continue;
+      node.remove();
+      form.removeAttribute("data-slack-pending");
+      pending.delete(form);
+    }
+  };
+
+  ctx.effect(() => {
+    const onKey = (event) => {
+      if (event.key !== "Enter" || event.shiftKey || event.isComposing || event.keyCode === 229) return;
+      const form = event.target.closest?.("[data-composer-surface]");
+      if (form && event.target.closest('[contenteditable="true"]')) begin(form);
+    };
+    const onClick = (event) => {
+      const button = event.target.closest?.('[data-composer-surface] button[type="submit"]');
+      if (button) begin(button.closest("[data-composer-surface]"));
+    };
+    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("click", onClick, true);
+    let queued = false;
+    const observer = new MutationObserver(() => {
+      if (queued || !pending.size) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        finish();
+      });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("click", onClick, true);
+      observer.disconnect();
+      for (const [form, { node }] of pending) {
+        node.remove();
+        form.removeAttribute("data-slack-pending");
+      }
+      pending.clear();
+    };
+  });
+}
+
 // Above two or more files in a message, Slack shows "2개의 첨부 파일 ▾" (folds
 // and unfolds them) and "모두 다운로드" (downloads each one). Buzz shows only
 // the cards, so this adds that line before each group of cards.
@@ -5967,6 +6132,7 @@ export function apply(ctx) {
   messageToolbar(ctx);
   slackImageSizes(ctx);
   uploadStatusKorean(ctx);
+  pendingUploadMessages(ctx);
   slackDropOverlay(ctx);
   reactionPills(ctx);
   addFormatBars(ctx);
