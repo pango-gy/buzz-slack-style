@@ -1981,6 +1981,8 @@ ${Object.entries(FILE_TOOL_ICONS).map(([name, d]) => {
 /* "Uploading to …" after sending while a file still uploads: Slack's blue
    progress bar. */
 [class*="_backgroundUploadBar_"] { accent-color: ${MENU_HIGHLIGHT}; }
+[class*="_backgroundUpload_"] [role="status"][data-slack-ko] { font-size: 0 !important; letter-spacing: 0 !important; }
+[class*="_backgroundUpload_"] [role="status"][data-slack-ko]::after { content: attr(data-slack-ko); font-size: 13px; letter-spacing: normal; }
 [class*="_backgroundUploadBar_"] > * { background: ${MENU_HIGHLIGHT} !important; }
 
 /* A dark Slack tooltip placed by script outside any clipping box. */
@@ -2378,7 +2380,6 @@ const TRANSLATION_PATTERNS = LANG === "en" ? [] : [
   [/^(.+) (?:is|are) typing$/, "$1 님이 입력 중입니다"],
   [/^(.+) (?:is|are) working$/, "$1 작업 중"],
   [/^(.+) local time$/, "현지 시간 $1"],
-  [/^Uploading to (.+)$/, "$1(으)로 업로드하는 중…"],
   [/^Managed by (.+)$/, "$1 님이 관리"],
   [/^(\d+) repl(?:y|ies)$/, "답글 $1개"],
   [/^Last reply (.+)$/, "마지막 답글 $1"],
@@ -4405,6 +4406,39 @@ function slackImageSizes(ctx) {
   });
 }
 
+// "Uploading to 홍길동" under the message box while a sent file still uploads.
+// The plugin's translator leaves the message box alone, so this one line is
+// shown in Korean through an overlay (data-slack-ko), which keeps Buzz's own
+// text live underneath as the phase changes.
+const UPLOAD_PHASES = { Uploading: "업로드하는 중", Preparing: "준비하는 중", Sending: "보내는 중", Finishing: "마무리하는 중", Processing: "처리하는 중" };
+function uploadStatusKorean(ctx) {
+  if (LANG === "en") return;
+  const sync = () => {
+    for (const status of document.querySelectorAll('[class*="_backgroundUpload_"] [role="status"]')) {
+      const m = /^(\w+) to (.+?)(?: and (\d+) more)?$/.exec(status.textContent.trim());
+      const verb = m && UPLOAD_PHASES[m[1]];
+      const ko = verb ? `${m[2]}(으)로 ${verb}…${m[3] ? ` (외 ${m[3]}개)` : ""}` : null;
+      if (status.getAttribute("data-slack-ko") === ko) continue;
+      if (ko) status.setAttribute("data-slack-ko", ko);
+      else status.removeAttribute("data-slack-ko");
+    }
+  };
+  ctx.effect(() => {
+    let queued = false;
+    const observer = new MutationObserver(() => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        sync();
+      });
+    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    sync();
+    return () => observer.disconnect();
+  });
+}
+
 // Above two or more files in a message, Slack shows "2개의 첨부 파일 ▾" (folds
 // and unfolds them) and "모두 다운로드" (downloads each one). Buzz shows only
 // the cards, so this adds that line before each group of cards.
@@ -5932,6 +5966,7 @@ export function apply(ctx) {
   fileGroupHeaders(ctx);
   messageToolbar(ctx);
   slackImageSizes(ctx);
+  uploadStatusKorean(ctx);
   slackDropOverlay(ctx);
   reactionPills(ctx);
   addFormatBars(ctx);
