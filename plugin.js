@@ -1978,6 +1978,20 @@ ${Object.entries(FILE_TOOL_ICONS).map(([name, d]) => {
 }
 :root[data-color-mode="dark"] [data-highlight-surface] [class*="_attachmentImage_"] { --border-image: rgba(255, 255, 255, 0.16); }
 
+/* Two or more pictures: equal light-grey tiles side by side, each picture
+   whole inside its tile (measured from Slack: about 408×230, 8px apart). */
+[data-highlight-surface] [class*="_imageList_"][data-slack-multi] {
+  flex-direction: row !important; flex-wrap: wrap !important; align-items: flex-start !important; gap: ${IMAGE_TILE.gap}px !important;
+}
+[data-highlight-surface] a[class*="_attachmentImage_"][data-slack-tile] {
+  width: min(${IMAGE_TILE.width}px, calc(50% - ${IMAGE_TILE.gap / 2}px)) !important;
+  height: ${IMAGE_TILE.height}px !important; aspect-ratio: auto !important; padding: 0 !important;
+  background: ${IMAGE_TILE.bg} !important;
+}
+[data-highlight-surface] a[class*="_attachmentImage_"][data-slack-tile] [class*="_attachmentImagePixels_"] { background: transparent !important; }
+[data-highlight-surface] a[class*="_attachmentImage_"][data-slack-tile] img { object-fit: contain !important; }
+:root[data-color-mode="dark"] [data-highlight-surface] a[class*="_attachmentImage_"][data-slack-tile] { background: rgba(255, 255, 255, 0.06) !important; }
+
 /* "Uploading to …" after sending while a file still uploads: Slack's blue
    progress bar. */
 [class*="_backgroundUploadBar_"] { accent-color: ${MENU_HIGHLIGHT}; }
@@ -4401,9 +4415,23 @@ function messageToolbar(ctx) {
 // small), with 8px corners. Buzz writes the size on each picture's own style
 // from its known shape ("w / h"), so this rewrites that width the same way.
 const IMAGE_MAX = { width: 720, height: 360, radius: 8, border: "#CCCCCC" };
+// Tiles for two or more pictures in one message (measured from Slack).
+const IMAGE_TILE = { width: 408, height: 230, gap: 8, bg: "#F8F8F8" };
 function slackImageSizes(ctx) {
   const sync = () => {
-    for (const image of document.querySelectorAll('[data-highlight-surface] a[class*="_attachmentImage_"][data-media-preview]')) {
+    // Several pictures in one message: Slack sets them side by side as equal
+    // tiles (multi-image CSS below); Buzz stacks them. Lists of 2 to 4 are
+    // tagged; larger ones keep Buzz's grid.
+    for (const list of document.querySelectorAll('[data-highlight-surface] [class*="_imageList_"]:not([class*="_imageGrid_"])')) {
+      const images = list.querySelectorAll('a[class*="_attachmentImage_"]');
+      const multi = images.length >= 2;
+      if (list.hasAttribute("data-slack-multi") !== multi) list.toggleAttribute("data-slack-multi", multi);
+      images.forEach((image) => {
+        if (image.hasAttribute("data-slack-tile") !== multi) image.toggleAttribute("data-slack-tile", multi);
+        if (multi && image.style.getPropertyPriority("width") === "important") image.style.removeProperty("width");
+      });
+    }
+    for (const image of document.querySelectorAll('[data-highlight-surface] a[class*="_attachmentImage_"][data-media-preview]:not([data-slack-tile])')) {
       const m = /^\s*([\d.]+)\s*\/\s*([\d.]+)\s*$/.exec(image.style.aspectRatio || "");
       if (!m) continue; // grids of several pictures keep Buzz's square tiles
       const ratio = Number(m[1]) / Number(m[2]);
@@ -4612,13 +4640,15 @@ function fileGroupHeaders(ctx) {
   const caret = '<svg class="slack-file-caret" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M5 8h14l-7 9z"/></svg>';
   const cloud = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 8a4 4 0 0 1 0 8M12 11v9m0 0-3-3m3 3 3-3"/></svg>';
   const downloadOne = (card) => {
+
     const button = card.querySelector('[class*="_fileDownloadAction_"] :is(button, a)');
     if (button) button.click();
     else if (card.matches("a, button")) card.click();
   };
   const sync = () => {
-    for (const group of document.querySelectorAll('[data-highlight-surface] [class*="_fileGroup_"]')) {
-      const cards = [...group.querySelectorAll(CARD)];
+    for (const group of document.querySelectorAll('[data-highlight-surface] [class*="_fileGroup_"], [data-highlight-surface] [class*="_imageList_"][data-slack-multi]')) {
+      const pictures = group.matches('[class*="_imageList_"]');
+      const cards = pictures ? [...group.querySelectorAll('a[class*="_attachmentImage_"]')] : [...group.querySelectorAll(CARD)];
       const header = group.previousElementSibling?.classList.contains("slack-file-header") ? group.previousElementSibling : null;
       if (cards.length < 2) {
         header?.remove();
@@ -4637,6 +4667,12 @@ function fileGroupHeaders(ctx) {
         `<span class="slack-file-sep" aria-hidden="true"></span>` +
         `<button type="button" class="slack-file-all">${cloud}<span>${t("모두 다운로드", "Download all")}</span></button>`;
       line.querySelector(".slack-file-count-label").textContent = label;
+      // Pictures have no download button to press (a plain link would take
+      // the whole app window to the picture), so they get only the fold.
+      if (pictures) {
+        line.querySelector(".slack-file-sep")?.remove();
+        line.querySelector(".slack-file-all")?.remove();
+      }
       line.querySelector(".slack-file-toggle").addEventListener("click", (event) => {
         const folded = !group.hasAttribute("data-slack-collapsed");
         group.toggleAttribute("data-slack-collapsed", folded);
