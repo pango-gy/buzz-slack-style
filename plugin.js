@@ -4684,7 +4684,7 @@ function fileGroupHeaders(ctx) {
         line.toggleAttribute("data-collapsed", folded);
         event.currentTarget.setAttribute("aria-expanded", String(!folded));
       });
-      line.querySelector(".slack-file-all").addEventListener("click", () => {
+      line.querySelector(".slack-file-all")?.addEventListener("click", () => {
         // One at a time, so the browser does not drop downloads started together.
         [...group.querySelectorAll(CARD)].forEach((card, i) => setTimeout(() => downloadOne(card), i * 400));
       });
