@@ -1980,11 +1980,16 @@ ${Object.entries(FILE_TOOL_ICONS).map(([name, d]) => {
 
 /* Two or more pictures: equal light-grey tiles side by side, each picture
    whole inside its tile (measured from Slack: about 408×230, 8px apart). */
+/* The list is as wide as the message (Buzz sizes it to its content, which
+   would make a percentage of it zero), up to two tiles. */
 [data-highlight-surface] [class*="_imageList_"][data-slack-multi] {
   flex-direction: row !important; flex-wrap: wrap !important; align-items: flex-start !important; gap: ${IMAGE_TILE.gap}px !important;
+  width: 100% !important; max-width: ${IMAGE_TILE.width * 2 + IMAGE_TILE.gap}px !important; box-sizing: border-box;
 }
+[data-highlight-surface] [class*="_imageGroup_"]:has(> [class*="_imageList_"][data-slack-multi]),
+[data-highlight-surface] [class*="_imageGroup_"]:has([data-slack-multi]) { width: 100% !important; }
 [data-highlight-surface] a[class*="_attachmentImage_"][data-slack-tile] {
-  width: min(${IMAGE_TILE.width}px, calc(50% - ${IMAGE_TILE.gap / 2}px)) !important;
+  width: calc(50% - ${IMAGE_TILE.gap / 2}px) !important; max-width: ${IMAGE_TILE.width}px !important; min-width: 120px !important; flex: none !important;
   height: ${IMAGE_TILE.height}px !important; aspect-ratio: auto !important; padding: 0 !important;
   background: ${IMAGE_TILE.bg} !important;
 }
