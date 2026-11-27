@@ -1969,6 +1969,15 @@ ${Object.entries(FILE_TOOL_ICONS).map(([name, d]) => {
 .slack-drop-title { font-size: 28px; font-weight: 800; line-height: 36px; color: var(--text-standard); text-align: center; }
 .slack-drop-sub { margin-top: 8px; font-size: 15px; line-height: 22px; color: var(--text-standard); text-align: center; }
 
+/* Pictures in messages: Slack's 8px corners (Buzz 16px); slackImageSizes sets
+   their size. */
+[data-highlight-surface] [class*="_attachmentImage_"] { --media-preview-radius: ${IMAGE_MAX.radius}px; border-radius: ${IMAGE_MAX.radius}px !important; }
+
+/* "Uploading to …" after sending while a file still uploads: Slack's blue
+   progress bar. */
+[class*="_backgroundUploadBar_"] { accent-color: ${MENU_HIGHLIGHT}; }
+[class*="_backgroundUploadBar_"] > * { background: ${MENU_HIGHLIGHT} !important; }
+
 /* A dark Slack tooltip placed by script outside any clipping box. */
 /* Slack's tooltip: 32px tall, 10px corners, white bold 13px on near-black. */
 .slack-floating-tip {
@@ -2364,6 +2373,7 @@ const TRANSLATION_PATTERNS = LANG === "en" ? [] : [
   [/^(.+) (?:is|are) typing$/, "$1 님이 입력 중입니다"],
   [/^(.+) (?:is|are) working$/, "$1 작업 중"],
   [/^(.+) local time$/, "현지 시간 $1"],
+  [/^Uploading to (.+)$/, "$1(으)로 업로드하는 중…"],
   [/^Managed by (.+)$/, "$1 님이 관리"],
   [/^(\d+) repl(?:y|ies)$/, "답글 $1개"],
   [/^Last reply (.+)$/, "마지막 답글 $1"],
@@ -4350,6 +4360,46 @@ function messageToolbar(ctx) {
   });
 }
 
+// A picture in a message, sized as Slack does: up to 360px tall and up to
+// 720px wide (Buzz: up to 320px tall and 360px wide, so wide pictures were
+// small), with 8px corners. Buzz writes the size on each picture's own style
+// from its known shape ("w / h"), so this rewrites that width the same way.
+const IMAGE_MAX = { width: 720, height: 360, radius: 8 };
+function slackImageSizes(ctx) {
+  const sync = () => {
+    for (const image of document.querySelectorAll('[data-highlight-surface] a[class*="_attachmentImage_"][data-media-preview]')) {
+      const m = /^\s*([\d.]+)\s*\/\s*([\d.]+)\s*$/.exec(image.style.aspectRatio || "");
+      if (!m) continue; // grids of several pictures keep Buzz's square tiles
+      const ratio = Number(m[1]) / Number(m[2]);
+      if (!(ratio > 0)) continue;
+      const box = image.closest('[class*="_messageContent_"], [data-highlight-surface]');
+      const room = box ? box.clientWidth - 8 : IMAGE_MAX.width;
+      const width = `${Math.max(1, Math.floor(Math.min(IMAGE_MAX.width, room, IMAGE_MAX.height * ratio)))}px`;
+      if (image.style.getPropertyValue("width") !== width || image.style.getPropertyPriority("width") !== "important")
+        image.style.setProperty("width", width, "important");
+      if (image.style.getPropertyValue("max-width") !== "100%") image.style.setProperty("max-width", "100%", "important");
+    }
+  };
+  ctx.effect(() => {
+    let queued = false;
+    const observer = new MutationObserver(() => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        sync();
+      });
+    });
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["style"] });
+    addEventListener("resize", sync);
+    sync();
+    return () => {
+      observer.disconnect();
+      removeEventListener("resize", sync);
+    };
+  });
+}
+
 // Above two or more files in a message, Slack shows "2개의 첨부 파일 ▾" (folds
 // and unfolds them) and "모두 다운로드" (downloads each one). Buzz shows only
 // the cards, so this adds that line before each group of cards.
@@ -5876,6 +5926,7 @@ export function apply(ctx) {
   composerFileTypes(ctx);
   fileGroupHeaders(ctx);
   messageToolbar(ctx);
+  slackImageSizes(ctx);
   slackDropOverlay(ctx);
   reactionPills(ctx);
   addFormatBars(ctx);
